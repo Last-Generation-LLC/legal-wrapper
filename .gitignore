@@ -42,3 +42,6 @@ next-env.d.ts
 # editor / OS
 .idea/
 .vscode/
+
+# PM per-issue worktrees
+.worktrees/
