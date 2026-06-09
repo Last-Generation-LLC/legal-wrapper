@@ -160,3 +160,84 @@ Jordan operates at junior developer level (one intro CS course, actively learnin
 - `npm run dev` to start.
 - SQLite file gitignored.
 - No secrets in code; no telemetry; no external services beyond the Anthropic API.
+
+<!-- PM:START (managed by pm skill — do not edit between markers) -->
+## PM-Managed Tasks and Superpowers
+
+When working on a task that has a task file in `.claude/epics/`, check the
+task's frontmatter before starting any workflow. The `workflow` fields tell
+you which superpowers phases have already been completed and can be skipped.
+
+### Reading the workflow fields
+
+The task frontmatter includes a `workflow` block like this:
+
+    workflow:
+      needs_questions: false    # Questions already answered — skip brainstorm
+      needs_spec: false         # Spec already written — skip spec generation
+      needs_spec_review: false  # Spec already reviewed — skip spec review
+      needs_plan: false         # Plan not needed — skip plan generation
+      needs_plan_review: false  # Plan already reviewed — skip plan review
+
+If a field is `false`, that phase is done. Do not re-run it. Do not re-ask
+those questions. Proceed to the next phase that is `true`, or go straight
+to implementation if all phases are `false`.
+
+### Using the Decisions section
+
+If the task file contains a `## Decisions` section, it holds the user's
+confirmed answers from a spec review. Treat these as final — they replace
+the brainstorm and spec review phases entirely. Do not second-guess them
+or ask the user to re-confirm.
+
+Example:
+
+    ## Decisions
+    - User object location: req.user (Option A)
+    - Public endpoints: login, register, health only — no others
+    - Auth approach: Supabase gotrue-js, not standalone JWT
+    - Token refresh: client-side only, no server-side refresh
+
+These are binding. Build to them.
+
+### How this maps to the superpowers sequence
+
+The normal superpowers flow is:
+
+    questions → spec → spec review → plan → plan review → implement
+
+With PM-managed tasks, the flow becomes:
+
+1. Read the task file's `workflow` fields
+2. Read the `## Decisions` section if it exists
+3. Start at the first phase that is still `true`
+4. If all phases are `false`, go directly to implementation
+
+Example: A task with `needs_questions: false`, `needs_spec: false`,
+`needs_spec_review: false`, `needs_plan: true`, `needs_plan_review: false`
+means: skip questions, skip spec, skip spec review, write a plan, skip
+plan review, implement. The plan should incorporate the decisions from
+the task file without re-asking.
+
+### Enrichment metadata
+
+The task file also contains `model`, `effort`, `complexity`,
+`tools_required`, and `env_required` fields. Use these as guidance:
+
+- `model` and `effort` are recommendations for how to configure the session.
+- `tools_required` lists CLI tools and MCP connections needed — verify
+  they are available before starting implementation.
+- `env_required` lists environment variables that must be set — check
+  they exist before starting implementation.
+- If a required tool or env var is missing, tell the user before proceeding.
+
+### PM owns branch finalization
+
+PM tasks are built in PM-managed git worktrees, and `/pm:ship` is the single
+finalizer. When you finish implementing a PM task and reach superpowers'
+`finishing-a-development-branch` step, choose **"Keep the branch as-is, I'll
+handle it later."** Do **not** merge, open a PR, delete the branch, or remove
+the worktree yourself. Then tell the user the worktree is ready and to run
+`/pm:ship <n>`. Shipping — merge → push → verification gate → code-review gate →
+cleanup — is PM's job, not the inner loop's.
+<!-- PM:END -->

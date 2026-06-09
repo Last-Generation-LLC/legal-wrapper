@@ -1,0 +1,14 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"$HOME/.claude/skills/pm/references/scripts/pm-session-hook.sh\""
+          }
+        ]
+      }
+    ]
+  }
+}
