@@ -4,7 +4,7 @@
 function App() {
   return (
     <DesignCanvas>
-      <DCSection id="pages" title="LocalLegora" subtitle="Local-first legal workspace · dark theme · one straightforward option">
+      <DCSection id="pages" title="Legal Document Workspace" subtitle="Local-first legal workspace · dark theme · one straightforward option">
         <DCArtboard id="assistant" label="Assistant · chat with selected documents" width={1440} height={900}>
           <AssistantPage />
         </DCArtboard>

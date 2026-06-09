@@ -2,7 +2,7 @@
 
 | Local File | GitHub Issue | Title |
 |------------|--------------|-------|
-| epic.md | #1 | [Epic] LocalLegora MVP |
+| epic.md | #1 | [Epic] Legal Document Workspace MVP |
 | 001.md→2 | #2 | Project scaffold: Next.js 15 + TS + Tailwind + shadcn/ui |
 | 002.md→3 | #3 | Prisma + SQLite schema (Document, ChatSession, Message) |
 | 003.md→4 | #4 | Design system port: tokens, primitives, layout shell |

@@ -307,14 +307,14 @@ Self-host these in production.
 
 | File                          | Purpose                                                                |
 |-------------------------------|------------------------------------------------------------------------|
-| `LocalLegora.html`            | Entry HTML — loads React/Babel CDNs and the JSX files in order         |
+| `legal-document-workspace.html`            | Entry HTML — loads React/Babel CDNs and the JSX files in order         |
 | `components/shared.jsx`       | Tokens, fonts, icon paths, `<Rail>`, `<TopBar>`, `<Pill>`, `<Btn>`     |
 | `components/assistant.jsx`    | `<AssistantPage>` — full Assistant screen                              |
 | `components/review.jsx`       | `<ReviewPage>` + `<Cell>` — full Review grid screen                    |
 | `components/app.jsx`          | App root that mounts both pages into the design canvas                 |
 | `design-canvas.jsx`           | Dev tool — pan/zoom canvas wrapping both artboards. **Do not port.**   |
 
-Open `LocalLegora.html` in a browser to see the prototype as designed.
+Open `legal-document-workspace.html` in a browser to see the prototype as designed.
 
 ---
 

@@ -1,12 +1,12 @@
 ---
-title: "LocalLegora MVP"
+title: "Legal Document Workspace MVP"
 status: open
 prd: mvp
 created: 2026-06-08
 github_issue: 1
 ---
 
-# LocalLegora MVP
+# Legal Document Workspace MVP
 
 ## Goal
 

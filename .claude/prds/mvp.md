@@ -1,11 +1,11 @@
 ---
-title: "LocalLegora MVP — Faithful Legal-AI Wrapper Clone"
+title: "Legal Document Workspace MVP — Faithful Legal-AI Wrapper Clone"
 status: parsed
 created: 2026-06-08
 epic: mvp
 ---
 
-# LocalLegora MVP — Faithful Legal-AI Wrapper Clone
+# Legal Document Workspace MVP — Faithful Legal-AI Wrapper Clone
 
 ## Problem
 
