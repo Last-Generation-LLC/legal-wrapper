@@ -2,14 +2,14 @@
 
 ## Project
 
-Working name: **LocalLegora** (rename as desired).
+Working name: **Legal Document Workspace** (rename as desired — no trademark references).
 
 A local-first legal document workspace built on Anthropic's Claude API. Two interfaces:
 
 1. **Assistant** — chat with one or more loaded documents.
 2. **Review** — a tabular grid running the same prompt across multiple documents (rows = docs, columns = prompts).
 
-Runs on a laptop. `npm run dev` is the entire deploy story.
+Runs on a laptop. `pnpm dev` is the entire deploy story.
 
 ---
 
@@ -73,7 +73,7 @@ This is not a phase-4 polish item. It is load-bearing in phase 3. Look up Anthro
 
 ## Tech stack (with rationale)
 
-- **Next.js 15 (App Router)** — single codebase for UI + API routes. One process to run.
+- **Next.js 16 (App Router)** — single codebase for UI + API routes. One process to run. (GA Oct 2025; chosen over 15 at scaffold time — greenfield, no migration cost, Turbopack stable by default.)
 - **TypeScript** — catches a lot at junior level that would otherwise bite at runtime.
 - **Tailwind CSS + shadcn/ui** — neutral professional aesthetic out of the box; Legora-adjacent visual language without custom design.
 - **SQLite + Prisma** — zero-setup local DB; Prisma schema is self-documenting.
@@ -157,7 +157,8 @@ Jordan operates at junior developer level (one intro CS course, actively learnin
 
 - `ANTHROPIC_API_KEY` in `.env.local` (gitignored).
 - Node 20+.
-- `npm run dev` to start.
+- pnpm (package manager — pinned via `packageManager` in package.json).
+- `pnpm install`, then `pnpm dev` to start.
 - SQLite file gitignored.
 - No secrets in code; no telemetry; no external services beyond the Anthropic API.
 
