@@ -1,8 +1,8 @@
 ---
 title: "LocalLegora MVP — Faithful Legal-AI Wrapper Clone"
-status: approved
+status: parsed
 created: 2026-06-08
-epic: null
+epic: mvp
 ---
 
 # LocalLegora MVP — Faithful Legal-AI Wrapper Clone
