@@ -3,7 +3,7 @@ title: "LocalLegora MVP"
 status: open
 prd: mvp
 created: 2026-06-08
-github_issue: null
+github_issue: 1
 ---
 
 # LocalLegora MVP
