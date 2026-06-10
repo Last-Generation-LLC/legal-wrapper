@@ -4,6 +4,7 @@ import {
   DEFAULT_SYSTEM_PROMPT,
   templateHasDocumentsToken,
   renderDocuments,
+  composeSystemPrompt,
 } from "@/lib/wrapper";
 import type { Document } from "@prisma/client";
 
@@ -75,5 +76,48 @@ describe("renderDocuments", () => {
 
   it("returns an empty string for no docs", () => {
     expect(renderDocuments([])).toBe("");
+  });
+});
+
+describe("composeSystemPrompt", () => {
+  it("substitutes the rendered block for the token using the default template", () => {
+    const out = composeSystemPrompt([doc({ filename: "a.pdf", extractedText: "AAA" })]);
+    expect(out).not.toContain("{{DOCUMENTS}}"); // token consumed
+    expect(out).toContain("===== DOCUMENT: a.pdf =====\nAAA");
+    expect(out).toContain("You are a contract review assistant"); // rest of prompt intact
+  });
+
+  it("uses a caller-supplied template (the editable-panel path)", () => {
+    const out = composeSystemPrompt(
+      [doc({ filename: "a.pdf", extractedText: "AAA" })],
+      "Custom prompt.\n{{DOCUMENTS}}",
+    );
+    expect(out).toBe("Custom prompt.\n===== DOCUMENT: a.pdf =====\nAAA");
+  });
+
+  it("appends the documents block when an edited template omits the token", () => {
+    const out = composeSystemPrompt(
+      [doc({ filename: "a.pdf", extractedText: "AAA" })],
+      "Edited prompt with no token.",
+    );
+    expect(out).toBe(
+      "Edited prompt with no token.\n\n# Attached documents\n===== DOCUMENT: a.pdf =====\nAAA",
+    );
+  });
+
+  it("treats the document text literally (no $-pattern substitution)", () => {
+    // Regression guard: String.replace/replaceAll honor $&, $1, $$ in the
+    // replacement string. The composer must use literal substitution so a
+    // document containing "$&" is preserved verbatim.
+    const out = composeSystemPrompt(
+      [doc({ filename: "a.pdf", extractedText: "price is $5 & rising $& done" })],
+      "{{DOCUMENTS}}",
+    );
+    expect(out).toContain("price is $5 & rising $& done");
+  });
+
+  it("replaces an empty selection with an empty block", () => {
+    const out = composeSystemPrompt([], "before {{DOCUMENTS}} after");
+    expect(out).toBe("before  after");
   });
 });

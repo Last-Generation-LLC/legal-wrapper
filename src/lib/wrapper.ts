@@ -48,3 +48,26 @@ export function renderDocuments(docs: Document[]): string {
     .map((d) => `===== DOCUMENT: ${documentName(d)} =====\n${d.extractedText}`)
     .join("\n\n");
 }
+
+/**
+ * Compose the final system prompt sent to Claude by filling the documents token.
+ *
+ * Pure and server-side (locked decision). If `template` contains
+ * `{{DOCUMENTS}}`, every occurrence is replaced with the rendered block. If it
+ * does not (an edited prompt that dropped the token), the block is appended at
+ * the end rather than silently lost — callers use `templateHasDocumentsToken`
+ * to detect this and surface a warning in the UI.
+ *
+ * Uses split/join for *literal* replacement; `String.replace`/`replaceAll`
+ * would interpret `$&`/`$1`/`$$` in the document text.
+ */
+export function composeSystemPrompt(
+  docs: Document[],
+  template: string = DEFAULT_SYSTEM_PROMPT,
+): string {
+  const block = renderDocuments(docs);
+  if (templateHasDocumentsToken(template)) {
+    return template.split(DOCUMENTS_TOKEN).join(block);
+  }
+  return `${template}\n\n# Attached documents\n${block}`;
+}
