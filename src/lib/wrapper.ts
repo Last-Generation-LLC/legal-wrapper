@@ -32,3 +32,19 @@ ${DOCUMENTS_TOKEN}`;
 export function templateHasDocumentsToken(template: string): boolean {
   return template.includes(DOCUMENTS_TOKEN);
 }
+
+/** Display name for a document: its title if set, otherwise its filename. */
+function documentName(doc: Pick<Document, "filename" | "title">): string {
+  return doc.title && doc.title.trim().length > 0 ? doc.title : doc.filename;
+}
+
+/**
+ * Render the selected documents into the block that replaces `{{DOCUMENTS}}`.
+ * Each doc becomes `===== DOCUMENT: <name> =====` then its full extracted text;
+ * blocks are joined by a blank line in selection order.
+ */
+export function renderDocuments(docs: Document[]): string {
+  return docs
+    .map((d) => `===== DOCUMENT: ${documentName(d)} =====\n${d.extractedText}`)
+    .join("\n\n");
+}

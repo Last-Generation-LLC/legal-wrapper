@@ -3,7 +3,23 @@ import {
   DOCUMENTS_TOKEN,
   DEFAULT_SYSTEM_PROMPT,
   templateHasDocumentsToken,
+  renderDocuments,
 } from "@/lib/wrapper";
+import type { Document } from "@prisma/client";
+
+function doc(over: Partial<Document>): Document {
+  return {
+    id: "d_test",
+    filename: "file.pdf",
+    title: null,
+    mimeType: "application/pdf",
+    extractedText: "body",
+    tokenCount: 0,
+    tokenCountEstimated: false,
+    createdAt: new Date("2026-06-10T00:00:00Z"),
+    ...over,
+  };
+}
 
 describe("default prompt + token", () => {
   it("uses {{DOCUMENTS}} as the token", () => {
@@ -22,5 +38,42 @@ describe("templateHasDocumentsToken", () => {
   it("detects the token's presence", () => {
     expect(templateHasDocumentsToken("a {{DOCUMENTS}} b")).toBe(true);
     expect(templateHasDocumentsToken("no token here")).toBe(false);
+  });
+});
+
+describe("renderDocuments", () => {
+  it("renders a single doc with the delimited header and full text", () => {
+    const out = renderDocuments([
+      doc({ filename: "msa.pdf", title: null, extractedText: "MSA text here" }),
+    ]);
+    expect(out).toBe("===== DOCUMENT: msa.pdf =====\nMSA text here");
+  });
+
+  it("prefers title over filename when title is present", () => {
+    const out = renderDocuments([
+      doc({ filename: "msa.pdf", title: "Master Services Agreement", extractedText: "x" }),
+    ]);
+    expect(out).toContain("===== DOCUMENT: Master Services Agreement =====");
+  });
+
+  it("falls back to filename when title is blank/whitespace", () => {
+    const out = renderDocuments([
+      doc({ filename: "nda.docx", title: "   ", extractedText: "y" }),
+    ]);
+    expect(out).toContain("===== DOCUMENT: nda.docx =====");
+  });
+
+  it("joins multiple docs with a blank line, preserving order", () => {
+    const out = renderDocuments([
+      doc({ filename: "a.pdf", extractedText: "AAA" }),
+      doc({ filename: "b.pdf", extractedText: "BBB" }),
+    ]);
+    expect(out).toBe(
+      "===== DOCUMENT: a.pdf =====\nAAA\n\n===== DOCUMENT: b.pdf =====\nBBB",
+    );
+  });
+
+  it("returns an empty string for no docs", () => {
+    expect(renderDocuments([])).toBe("");
   });
 });
