@@ -1,0 +1,52 @@
+// Prisma schema for the Legal Document Workspace.
+//
+// Local-first SQLite database. The connection string is a plain file path
+// (not a secret), hardcoded here so a fresh clone runs `pnpm prisma migrate`
+// with zero env setup — matching the project's "zero-setup local DB" goal.
+// The dev.db file is gitignored.
+//
+// Pinned to Prisma 6 (classic prisma-client-js generator) on purpose: the
+// simplest, best-documented setup for a local SQLite demo. Prisma 7's
+// driver-adapter + prisma.config.ts approach adds moving parts we don't need
+// at this scale.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = "file:./dev.db"
+}
+
+/// An uploaded source document (PDF or DOCX) parsed to plain text.
+model Document {
+  id            String   @id @default(cuid())
+  filename      String
+  title         String? // optional friendly display name; falls back to filename
+  mimeType      String
+  extractedText String
+  tokenCount    Int
+  createdAt     DateTime @default(now())
+}
+
+/// A single Assistant conversation. Groups its messages in order.
+model ChatSession {
+  id        String    @id @default(cuid())
+  title     String? // optional friendly name for the conversation
+  createdAt DateTime  @default(now())
+  messages  Message[]
+}
+
+/// One turn in a ChatSession. `role` is a plain string ("user" | "assistant"),
+/// matching the AI SDK's role values — SQLite has no native enum type.
+model Message {
+  id            String      @id @default(cuid())
+  chatSession   ChatSession @relation(fields: [chatSessionId], references: [id], onDelete: Cascade)
+  chatSessionId String
+  role          String
+  content       String
+  createdAt     DateTime    @default(now())
+
+  @@index([chatSessionId])
+}
