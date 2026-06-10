@@ -26,6 +26,7 @@ describe("DocSidebar", () => {
   beforeEach(() => {
     refresh.mockClear();
     vi.restoreAllMocks();
+    vi.unstubAllGlobals();
   });
 
   it("shows the live header count/token total and an empty state with no docs", () => {

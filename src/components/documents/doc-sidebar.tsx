@@ -86,7 +86,14 @@ export function DocSidebar() {
         </span>
       </div>
       <div className="px-3.5 pb-2.5">
-        <div className="h-[3px] overflow-hidden rounded-[2px] bg-panel-hi">
+        <div
+          role="progressbar"
+          aria-valuenow={Math.round(meterPct)}
+          aria-valuemin={0}
+          aria-valuemax={100}
+          aria-label="Tokens in context"
+          className="h-[3px] overflow-hidden rounded-[2px] bg-panel-hi"
+        >
           <div className="h-full bg-amber" style={{ width: `${meterPct}%` }} />
         </div>
       </div>
