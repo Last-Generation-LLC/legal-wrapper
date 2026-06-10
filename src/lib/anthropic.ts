@@ -30,8 +30,30 @@ export function getAnthropic(): Anthropic {
 }
 
 /**
- * The model the context meter is measured against. Documents are sent to the
- * Opus-tier Assistant, so we count tokens against it for an accurate meter.
- * Counts are model-specific, so this must match the Assistant's model.
+ * Pinned Claude model IDs, verified against live Anthropic docs (2026-06).
+ * The mock "OPUS 4.5" / "SONNET 4.5" labels in the design handoff were
+ * placeholders — these are the real, current IDs.
+ *
+ * Modular by design (locked decision): a single registry keyed by role rather
+ * than IDs hardcoded at call sites, so a *later* phase can swap models or let a
+ * user bring their own model/provider without touching any caller. The
+ * user-facing override feature itself is out of scope here — only this shape.
  */
-export const TOKEN_COUNT_MODEL = "claude-opus-4-8";
+export type ModelRole = "assistant" | "review";
+
+export const MODELS: Record<ModelRole, string> = {
+  assistant: "claude-opus-4-8", // Opus 4.8 — the Assistant tab (reliability over cost)
+  review: "claude-sonnet-4-6", // Sonnet 4.6 — Review grid cells (volume work)
+};
+
+/** Resolve the pinned model ID for a role. The seam a future override hooks into. */
+export function modelFor(role: ModelRole): string {
+  return MODELS[role];
+}
+
+/**
+ * The model the context meter is measured against. Token counts are
+ * model-specific; documents go to the Opus-tier Assistant, so we count against
+ * it. Derived from the registry so there is exactly one source of truth.
+ */
+export const TOKEN_COUNT_MODEL = MODELS.assistant;
