@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import type { Document } from "@prisma/client";
 
 // Mock the Prisma singleton before importing the module under test.
 vi.mock("@/lib/prisma", () => ({
@@ -6,14 +7,16 @@ vi.mock("@/lib/prisma", () => ({
 }));
 
 import { prisma } from "@/lib/prisma";
-import { listDocuments } from "@/lib/documents";
+import { listDocuments, type DocumentMeta } from "@/lib/documents";
 
 describe("listDocuments", () => {
   beforeEach(() => vi.clearAllMocks());
 
   it("selects metadata only, newest first, and never the extracted text", async () => {
-    const rows = [{ id: "d1", filename: "a.pdf", title: null, mimeType: "application/pdf", tokenCount: 100, tokenCountEstimated: false, createdAt: new Date() }];
-    vi.mocked(prisma.document.findMany).mockResolvedValue(rows as never);
+    const rows: DocumentMeta[] = [{ id: "d1", filename: "a.pdf", title: null, mimeType: "application/pdf", tokenCount: 100, tokenCountEstimated: false, createdAt: new Date() }];
+    // mockResolvedValue expects the full Document model (includes extractedText);
+    // cast through unknown since rows is intentionally the metadata-only subset.
+    vi.mocked(prisma.document.findMany).mockResolvedValue(rows as unknown as Document[]);
 
     const result = await listDocuments();
 
