@@ -24,6 +24,7 @@ export function DocRow({
     >
       {/* bespoke 14px checkbox (handoff) — amber fill + check glyph when on */}
       <span
+        aria-hidden="true"
         className={cn(
           "mt-0.5 flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded-[2px] border",
           selected ? "border-amber bg-amber" : "border-border",
