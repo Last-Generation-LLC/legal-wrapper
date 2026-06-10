@@ -27,7 +27,10 @@ model Document {
   mimeType      String
   extractedText String
   tokenCount    Int
-  createdAt     DateTime @default(now())
+  /// true when tokenCount is a rough char-based fallback (the live
+  /// Anthropic count_tokens call failed at upload time), not an exact count.
+  tokenCountEstimated Boolean @default(false)
+  createdAt           DateTime @default(now())
 }
 
 /// A single Assistant conversation. Groups its messages in order.
