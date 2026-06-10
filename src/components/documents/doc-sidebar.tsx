@@ -82,7 +82,7 @@ export function DocSidebar() {
           In Context · {selectedCount}
         </span>
         <span className="font-mono text-[10.5px] text-dim">
-          {(selectedTokens / 1000).toFixed(1)}k / 180k
+          {(selectedTokens / 1000).toFixed(1)}k / {(ceiling / 1000).toFixed(0)}k
         </span>
       </div>
       <div className="px-3.5 pb-2.5">
