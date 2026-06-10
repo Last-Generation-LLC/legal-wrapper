@@ -735,14 +735,14 @@ const items: { href: string; label: string; icon: IconName }[] = [
   { href: "/documents", label: "Documents", icon: "folder" },
 ];
 
-// 56px fixed nav. Logo "LL" (placeholder wordmark) + three sections + settings.
+// 56px fixed nav. Logo "LLW" (Local Legal Wrapper wordmark) + three sections + settings.
 // Active section = panelHi bg + full text color; inactive = dim.
 export function Rail() {
   const pathname = usePathname();
   return (
     <nav className="flex w-14 shrink-0 flex-col items-stretch gap-0.5 border-r border-border bg-bg py-3.5">
-      <div className="mx-2.5 mb-3.5 flex h-7 items-center justify-center rounded border border-border font-mono text-[10px] font-medium tracking-[0.1em] text-amber">
-        LL
+      <div className="mx-2.5 mb-3.5 flex h-7 items-center justify-center rounded border border-border font-mono text-[10px] font-medium tracking-[0.08em] text-amber">
+        LLW
       </div>
       {items.map((it) => {
         const active = pathname.startsWith(it.href);
