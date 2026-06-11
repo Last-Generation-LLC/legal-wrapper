@@ -1,4 +1,5 @@
 import Anthropic from "@anthropic-ai/sdk";
+import { createAnthropic, type AnthropicProvider } from "@ai-sdk/anthropic";
 
 // Shared Anthropic client.
 //
@@ -20,6 +21,7 @@ import Anthropic from "@anthropic-ai/sdk";
 
 const globalForAnthropic = globalThis as unknown as {
   anthropic: Anthropic | undefined;
+  anthropicProvider: AnthropicProvider | undefined;
 };
 
 export function getAnthropic(): Anthropic {
@@ -57,3 +59,29 @@ export function modelFor(role: ModelRole): string {
  * it. Derived from the registry so there is exactly one source of truth.
  */
 export const TOKEN_COUNT_MODEL = MODELS.assistant;
+
+/**
+ * The AI SDK provider path of the model seam. Routes that stream via the
+ * Vercel AI SDK get their LanguageModel from here — never by importing
+ * @ai-sdk/anthropic themselves (locked decision: the seam owns both client
+ * paths, raw SDK and AI SDK).
+ *
+ * `apiKey` is the future BYO-key hook (#20): when given, a FRESH provider is
+ * built with that key and never memoized (a user's key must not leak into the
+ * shared singleton). When omitted, the provider reads ANTHROPIC_API_KEY from
+ * the environment lazily at call time and is memoized like getAnthropic().
+ */
+export function getAnthropicProvider(apiKey?: string): AnthropicProvider {
+  if (apiKey !== undefined) {
+    return createAnthropic({ apiKey });
+  }
+  if (!globalForAnthropic.anthropicProvider) {
+    globalForAnthropic.anthropicProvider = createAnthropic({});
+  }
+  return globalForAnthropic.anthropicProvider;
+}
+
+/** Resolve a streaming-capable LanguageModel for a role through the seam. */
+export function languageModelFor(role: ModelRole, apiKey?: string) {
+  return getAnthropicProvider(apiKey)(modelFor(role));
+}
