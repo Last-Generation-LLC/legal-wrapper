@@ -7,7 +7,7 @@ import {
   PDF_MIME,
   DOCX_MIME,
 } from "@/lib/extract";
-import { makePdf, makeBlankPdf, makeDocx } from "@/test/fixtures";
+import { makePdf, makeBlankPdf, makeDocx, makeMultiPagePdf } from "@/test/fixtures";
 
 describe("isSupportedMimeType", () => {
   it("accepts PDF and DOCX", () => {
@@ -53,5 +53,24 @@ describe("extractText", () => {
     await expect(
       extractText(Buffer.from("this is not a pdf"), PDF_MIME),
     ).rejects.toBeInstanceOf(ExtractionError);
+  });
+
+  it("preserves pdf page markers in the stored text (so pages are derivable)", async () => {
+    const buffer = await makeMultiPagePdf(["First page body", "Second page body"]);
+    const result = await extractText(buffer, PDF_MIME);
+    // The page-boundary markers must survive into stored text now.
+    expect(result.text).toMatch(/-- 1 of 2 --/);
+    expect(result.text).toMatch(/-- 2 of 2 --/);
+    expect(result.text).toContain("First page body");
+    expect(result.text).toContain("Second page body");
+  });
+
+  it("still rejects a multi-page text-less PDF (markers alone are not content)", async () => {
+    // Two blank pages: the only text pdf-parse yields is the page markers.
+    // The empty-guard must strip markers before deciding it is empty.
+    const buffer = await makeMultiPagePdf(["", ""]);
+    await expect(extractText(buffer, PDF_MIME)).rejects.toBeInstanceOf(
+      ExtractionError,
+    );
   });
 });
