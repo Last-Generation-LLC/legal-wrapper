@@ -74,3 +74,34 @@ export interface VerifiedAnswer {
   citations: VerifiedCitation[];
   confidence: number;
 }
+
+/** Tool name the Review grid forces the model to call (decision d5). */
+export const REVIEW_TOOL_NAME = "submit_answer";
+
+/** Delimiters bracketing the Assistant's machine-readable JSON footer (decision d5). */
+export const FOOTER_OPEN = "<<<CITATIONS_JSON>>>";
+export const FOOTER_CLOSE = "<<<END_CITATIONS_JSON>>>";
+
+// The shared anti-fabrication instructions both modes prepend. References the
+// page markers extract.ts now preserves so the model can cite a real page.
+const CITATION_CORE = `# Citations and confidence
+- Support factual claims with citations drawn ONLY from the attached documents. If the documents do not address a point, say so — never invent support.
+- Every citation must include a SHORT VERBATIM QUOTE copied exactly from the document text (${MIN_QUOTE_LENGTH}-${MAX_QUOTE_LENGTH} characters), not a paraphrase. If you cannot quote it, do not cite it.
+- Identify the source document by its id, and include the section label (e.g. "§12.3") when you can.
+- The document text contains page-boundary lines of the form "-- N of M --". Never quote these lines, but use them to know which page a passage is on. Do not invent page numbers.
+- Provide a confidence value in [0,1] meaning HOW WELL THE ATTACHED DOCUMENTS SUPPORT YOUR ANSWER — not your certainty that the answer is correct. Lower it when the documents are silent or only partially on point.`;
+
+/** Prompt strategy for the Review grid: structured output via forced tool-use. */
+export function reviewPromptStrategy(): string {
+  return `${CITATION_CORE}
+- Return your answer by calling the \`${REVIEW_TOOL_NAME}\` tool: put the answer in \`value\`, the supporting verbatim quotes in \`citations\`, and your document-support score in \`confidence\`.`;
+}
+
+/** Prompt strategy for the Assistant: stream prose, then a delimited JSON footer. */
+export function assistantPromptStrategy(): string {
+  return `${CITATION_CORE}
+
+# Output format
+- Write your answer as ordinary prose for the user to read.
+- AFTER the prose, append a machine-readable footer on its own lines: the marker ${FOOTER_OPEN}, then a single JSON object {"citations": [ {"docId": "...", "quote": "...", "section": "..."} ], "confidence": 0.0}, then the marker ${FOOTER_CLOSE}. Put nothing after the closing marker.`;
+}

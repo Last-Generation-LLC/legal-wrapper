@@ -3,6 +3,11 @@ import {
   RawAnswerSchema,
   RawFooterSchema,
   MIN_QUOTE_LENGTH,
+  assistantPromptStrategy,
+  reviewPromptStrategy,
+  FOOTER_OPEN,
+  FOOTER_CLOSE,
+  REVIEW_TOOL_NAME,
 } from "@/lib/contract";
 
 describe("RawAnswerSchema", () => {
@@ -46,5 +51,26 @@ describe("RawFooterSchema", () => {
     // value is not part of the footer
     expect(RawFooterSchema.safeParse({ ...footer, value: "x" }).success).toBe(true); // extra key ignored
     expect("value" in RawFooterSchema.parse({ ...footer })).toBe(false);
+  });
+});
+
+describe("prompt strategies", () => {
+  it("share the anti-fabrication core", () => {
+    for (const text of [assistantPromptStrategy(), reviewPromptStrategy()]) {
+      expect(text.toLowerCase()).toContain("verbatim");
+      expect(text).toMatch(/only|do not invent|never/i);
+      expect(text).toContain("-- N of M --"); // explains the page markers
+      expect(text.toLowerCase()).toContain("support"); // confidence = document support
+    }
+  });
+
+  it("the assistant strategy describes the footer delimiters", () => {
+    const text = assistantPromptStrategy();
+    expect(text).toContain(FOOTER_OPEN);
+    expect(text).toContain(FOOTER_CLOSE);
+  });
+
+  it("the review strategy points at the tool", () => {
+    expect(reviewPromptStrategy()).toContain(REVIEW_TOOL_NAME);
   });
 });
