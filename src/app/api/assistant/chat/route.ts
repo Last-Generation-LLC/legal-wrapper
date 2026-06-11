@@ -102,33 +102,49 @@ export async function POST(request: Request) {
   }
 
   const stream = createUIMessageStream({
-    execute: ({ writer }) => {
+    execute: async ({ writer }) => {
       const result = streamText({
         model: languageModelFor("assistant"),
         system,
         messages: modelMessages,
         maxOutputTokens: MAX_OUTPUT_TOKENS,
         // Single-shot by construction: no tools, no stopWhen/steps.
-        onFinish({ text }) {
-          // The stream is done; now the full text exists. Parse the footer
-          // and verify every quote against the source documents. A missing
-          // or malformed footer degrades to prose-only (locked decision) —
-          // we simply don't write the data part.
-          const { value, footer } = parseAssistantFooter(text);
-          if (!footer) return;
-          // Attach the FULL VerifiedAnswer (locked decision): `value` is the
-          // footer-stripped prose, `citations` carry verified flags + derived
-          // pages, `confidence` is possibly downgraded. #10 reads this part
-          // from message.parts and can render the clean prose from `value`
-          // without re-parsing.
-          const verified = verifyAnswer({ value, ...footer }, docTextById);
-          writer.write({
-            type: "data-citations",
-            data: verified,
-          });
-        },
       });
       writer.merge(result.toUIMessageStream());
+
+      // `result.text` resolves when generation completes, and (verified
+      // against ai@6.0.202: createUIMessageStream pushes this execute promise
+      // into `ongoingStreamPromises` and only closes the controller after all
+      // of them settle) the response stream stays open until this function
+      // returns — so the data part below can never lose a race with stream
+      // close. Writing from streamText's onFinish had exactly that race: the
+      // merged stream could complete and close the response before onFinish's
+      // write landed.
+      let text: string;
+      try {
+        text = await result.text;
+      } catch {
+        // result.text rejects on stream errors / no output (verified in the
+        // SDK source: `_steps.reject`). The merged UI stream already carried
+        // an error part through onError below; rethrowing here would enqueue
+        // a duplicate. Degrade silently: no data part.
+        return;
+      }
+
+      // The full text exists; parse the footer and verify every quote against
+      // the source documents. A missing or malformed footer degrades to
+      // prose-only (locked decision) — we simply don't write the data part.
+      const { value, footer } = parseAssistantFooter(text);
+      if (!footer) return;
+      // Attach the FULL VerifiedAnswer (locked decision): `value` is the
+      // footer-stripped prose, `citations` carry verified flags + derived
+      // pages, `confidence` is possibly downgraded. #10 reads this part
+      // from message.parts and can render the clean prose from `value`
+      // without re-parsing.
+      writer.write({
+        type: "data-citations",
+        data: verifyAnswer({ value, ...footer }, docTextById),
+      });
     },
     // Errors arrive mid-stream (the response is already 200 by then). Map
     // them to a legible message — the context-ceiling case especially, since
