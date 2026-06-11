@@ -1,5 +1,7 @@
 import type { Document } from "@prisma/client";
 
+import { assistantPromptStrategy } from "@/lib/contract";
+
 /**
  * The literal token in the system prompt that the composer replaces with the
  * full text of the selected documents at send time.
@@ -70,4 +72,19 @@ export function composeSystemPrompt(
     return template.split(DOCUMENTS_TOKEN).join(block);
   }
   return `${template}\n\n# Attached documents\n${block}`;
+}
+
+/**
+ * The COMPLETE Assistant system prompt: the (possibly user-edited) template
+ * with documents filled, then the citation/confidence strategy block.
+ * Fixed order, nothing else (locked transparency decision) — the prompt panel
+ * (#11) renders exactly these two pieces, so what the user sees is what the
+ * model receives. The strategy block is appended (not part of the editable
+ * template) so an edit cannot break the footer protocol the route parses.
+ */
+export function composeAssistantSystemPrompt(
+  docs: Document[],
+  template: string = DEFAULT_SYSTEM_PROMPT,
+): string {
+  return `${composeSystemPrompt(docs, template)}\n\n${assistantPromptStrategy()}`;
 }

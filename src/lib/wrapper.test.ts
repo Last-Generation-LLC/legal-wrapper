@@ -5,7 +5,9 @@ import {
   templateHasDocumentsToken,
   renderDocuments,
   composeSystemPrompt,
+  composeAssistantSystemPrompt,
 } from "@/lib/wrapper";
+import { assistantPromptStrategy } from "@/lib/contract";
 import type { Document } from "@prisma/client";
 
 function doc(over: Partial<Document>): Document {
@@ -119,5 +121,33 @@ describe("composeSystemPrompt", () => {
   it("replaces an empty selection with an empty block", () => {
     const out = composeSystemPrompt([], "before {{DOCUMENTS}} after");
     expect(out).toBe("before  after");
+  });
+});
+
+describe("composeAssistantSystemPrompt", () => {
+  const msa = doc({
+    filename: "msa.pdf",
+    title: null,
+    extractedText: "The term of this Agreement is five (5) years.",
+  });
+
+  it("is the filled template, then a blank line, then the strategy — nothing else", () => {
+    const template = `Custom prompt.\n{{DOCUMENTS}}`;
+    const result = composeAssistantSystemPrompt([msa], template);
+    const expectedHead = composeSystemPrompt([msa], template);
+    expect(result).toBe(`${expectedHead}\n\n${assistantPromptStrategy()}`);
+  });
+
+  it("defaults to DEFAULT_SYSTEM_PROMPT when no template is given", () => {
+    const result = composeAssistantSystemPrompt([msa]);
+    expect(result.startsWith("You are a contract review assistant")).toBe(true);
+    expect(result).toContain("The term of this Agreement");
+    expect(result.endsWith(assistantPromptStrategy())).toBe(true);
+  });
+
+  it("composes with zero documents (empty docIds is allowed)", () => {
+    const result = composeAssistantSystemPrompt([], "Prompt.\n{{DOCUMENTS}}");
+    expect(result).toContain("Prompt.");
+    expect(result.endsWith(assistantPromptStrategy())).toBe(true);
   });
 });
