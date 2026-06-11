@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { normalizeWhitespace, verifyCitation, derivePage } from "@/lib/citation";
+import { normalizeWhitespace, verifyCitation, derivePage, applyConfidence, verifyAnswer } from "@/lib/citation";
+import { FAILED_CITATION_CONFIDENCE_CAP, type RawAnswer } from "@/lib/contract";
 
 describe("normalizeWhitespace", () => {
   it("collapses runs of whitespace and trims", () => {
@@ -47,5 +48,56 @@ describe("derivePage", () => {
 
   it("returns undefined when there are no page markers (DOCX / pre-existing docs)", () => {
     expect(derivePage("Plain docx text with no markers at all.", "Plain docx text")).toBeUndefined();
+  });
+});
+
+describe("applyConfidence", () => {
+  it("passes confidence through when nothing failed", () => {
+    expect(applyConfidence(0.9, false)).toBe(0.9);
+  });
+  it("caps confidence at the low band when something failed", () => {
+    expect(applyConfidence(0.9, true)).toBe(FAILED_CITATION_CONFIDENCE_CAP);
+    expect(applyConfidence(0.2, true)).toBe(0.2); // never raises an already-low score
+  });
+});
+
+describe("verifyAnswer", () => {
+  // Trailing marker, matching real pdf-parse output.
+  const docText = "Liability shall be uncapped for breach of confidentiality.\n-- 1 of 1 --";
+  const docs = new Map<string, string>([["doc_1", docText]]);
+
+  it("marks real citations verified, derives page, and keeps confidence", () => {
+    const answer: RawAnswer = {
+      value: "Uncapped for confidentiality.",
+      citations: [{ docId: "doc_1", quote: "Liability shall be uncapped for breach", section: "§12" }],
+      confidence: 0.88,
+    };
+    const result = verifyAnswer(answer, docs);
+    expect(result.citations[0].verified).toBe(true);
+    expect(result.citations[0].page).toBe(1);
+    expect(result.confidence).toBe(0.88);
+  });
+
+  it("flags a fabricated citation and caps the whole answer's confidence", () => {
+    const answer: RawAnswer = {
+      value: "Capped at fees.",
+      citations: [{ docId: "doc_1", quote: "liability is capped at fees paid in the prior 12 months" }],
+      confidence: 0.95,
+    };
+    const result = verifyAnswer(answer, docs);
+    expect(result.citations[0].verified).toBe(false);
+    expect(result.citations[0].page).toBeUndefined();
+    expect(result.confidence).toBe(FAILED_CITATION_CONFIDENCE_CAP);
+  });
+
+  it("treats an unknown docId as unverified", () => {
+    const answer: RawAnswer = {
+      value: "x",
+      citations: [{ docId: "missing", quote: "Liability shall be uncapped for breach" }],
+      confidence: 0.7,
+    };
+    const result = verifyAnswer(answer, docs);
+    expect(result.citations[0].verified).toBe(false);
+    expect(result.confidence).toBe(FAILED_CITATION_CONFIDENCE_CAP);
   });
 });

@@ -12,6 +12,13 @@ import * as z from "zod";
 export const MIN_QUOTE_LENGTH = 12;
 export const MAX_QUOTE_LENGTH = 300;
 
+/**
+ * Confidence cap applied to the WHOLE answer when any citation fails the quote
+ * check (decisions n5/d4). Mirrors the tokens.ts honesty ethic: a number we
+ * can't stand behind is forced into the low band, never shown at face value.
+ */
+export const FAILED_CITATION_CONFIDENCE_CAP = 0.3;
+
 /** A single supporting citation as emitted by the model (before verification). */
 export const RawCitationSchema = z.object({
   docId: z

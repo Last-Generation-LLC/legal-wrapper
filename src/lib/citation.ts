@@ -3,6 +3,7 @@
 // which is what makes the anti-fabrication guard cheaply unit-testable.
 
 import {
+  FAILED_CITATION_CONFIDENCE_CAP,
   type RawAnswer,
   type VerifiedAnswer,
   type VerifiedCitation,
@@ -63,4 +64,37 @@ export function derivePage(docText: string, quote: string): number | undefined {
     }
   }
   return undefined;
+}
+
+/**
+ * Apply the confidence downgrade (decisions d4/n5): if any citation failed its
+ * quote check, cap the whole answer's confidence at the low band. Never raises
+ * an already-lower score.
+ */
+export function applyConfidence(raw: number, anyUnverified: boolean): number {
+  return anyUnverified ? Math.min(raw, FAILED_CITATION_CONFIDENCE_CAP) : raw;
+}
+
+/**
+ * Verify a raw model answer against the source documents (keyed by id) and
+ * return the annotated answer consumers render: each citation flagged
+ * verified/unverified (keep-but-flag, decision n3) with a derived page, and the
+ * confidence downgraded if anything failed.
+ */
+export function verifyAnswer(
+  answer: RawAnswer,
+  docTextById: Map<string, string>,
+): VerifiedAnswer {
+  const citations: VerifiedCitation[] = answer.citations.map((c) => {
+    const docText = docTextById.get(c.docId);
+    const verified = docText ? verifyCitation(c.quote, docText) : false;
+    const page = verified && docText ? derivePage(docText, c.quote) : undefined;
+    return { ...c, verified, page };
+  });
+  const anyUnverified = citations.some((c) => !c.verified);
+  return {
+    value: answer.value,
+    citations,
+    confidence: applyConfidence(answer.confidence, anyUnverified),
+  };
 }
