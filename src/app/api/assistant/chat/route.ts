@@ -6,6 +6,7 @@ import {
   streamText,
   validateUIMessages,
   TypeValidationError,
+  type ModelMessage,
   type UIMessage,
 } from "ai";
 import { prisma } from "@/lib/prisma";
@@ -62,19 +63,24 @@ export async function POST(request: Request) {
     throw err;
   }
 
+  // Silently deduplicate repeated docIds (first-occurrence order). Prisma's
+  // IN clause deduplicates anyway, so a repeated id would otherwise trip the
+  // length check below and 404 on a document that exists.
+  const docIds = [...new Set(parsed.data.docIds)];
+
   // Fetch the selected documents — full text included, the route needs it for
   // both prompt composition and citation verification. Selection order is
   // re-imposed below (findMany returns arbitrary order).
   const docs = await prisma.document.findMany({
-    where: { id: { in: parsed.data.docIds } },
+    where: { id: { in: docIds } },
   });
-  if (docs.length !== parsed.data.docIds.length) {
+  if (docs.length !== docIds.length) {
     const found = new Set(docs.map((d) => d.id));
-    const missing = parsed.data.docIds.filter((id) => !found.has(id));
+    const missing = docIds.filter((id) => !found.has(id));
     return error(`Unknown document id(s): ${missing.join(", ")}.`, 404);
   }
   const byId = new Map(docs.map((d) => [d.id, d]));
-  const ordered = parsed.data.docIds.map((id) => byId.get(id)!);
+  const ordered = docIds.map((id) => byId.get(id)!);
 
   // The COMPLETE prompt: user-editable template (docs filled) + citation
   // strategy, fixed order, nothing else. What the user sees in the prompt
@@ -85,7 +91,15 @@ export async function POST(request: Request) {
   );
   const docTextById = new Map(ordered.map((d) => [d.id, d.extractedText]));
 
-  const modelMessages = await convertToModelMessages(messages);
+  // Conversion can throw even after validateUIMessages passes — a history
+  // part the model API can't accept is a client-content problem, so keep the
+  // structured-400 contract rather than leaking an opaque 500.
+  let modelMessages: ModelMessage[];
+  try {
+    modelMessages = await convertToModelMessages(messages);
+  } catch {
+    return error("messages could not be converted for the model.", 400);
+  }
 
   const stream = createUIMessageStream({
     execute: ({ writer }) => {

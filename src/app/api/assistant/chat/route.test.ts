@@ -186,6 +186,14 @@ describe("POST /api/assistant/chat — streaming", () => {
     expect(sse).toContain('"confidence":0.3');
   });
 
+  it("deduplicates repeated docIds instead of returning a false 404", async () => {
+    vi.mocked(prisma.document.findMany).mockResolvedValue([DOC]);
+    scriptModel("ok");
+
+    const res = await POST(request(validBody({ docIds: ["doc1", "doc1"] })));
+    expect(res.status).toBe(200);
+  });
+
   it("allows an empty docIds (chat without documents)", async () => {
     vi.mocked(prisma.document.findMany).mockResolvedValue([]);
     scriptModel("General answer, no documents attached.");
