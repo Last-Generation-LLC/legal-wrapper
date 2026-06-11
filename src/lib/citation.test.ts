@@ -1,6 +1,8 @@
 import { describe, it, expect } from "vitest";
 import { normalizeWhitespace, verifyCitation, derivePage, applyConfidence, verifyAnswer } from "@/lib/citation";
 import { FAILED_CITATION_CONFIDENCE_CAP, type RawAnswer } from "@/lib/contract";
+import { extractText, PDF_MIME } from "@/lib/extract";
+import { makeMultiPagePdf } from "@/test/fixtures";
 
 describe("normalizeWhitespace", () => {
   it("collapses runs of whitespace and trims", () => {
@@ -99,5 +101,39 @@ describe("verifyAnswer", () => {
     const result = verifyAnswer(answer, docs);
     expect(result.citations[0].verified).toBe(false);
     expect(result.confidence).toBe(FAILED_CITATION_CONFIDENCE_CAP);
+  });
+});
+
+describe("verifyAnswer — integration against real extracted text", () => {
+  it("verifies a real quote with its page and flags a fabricated one", async () => {
+    const buffer = await makeMultiPagePdf([
+      "Recitals and background of the Agreement",
+      "Liability shall be uncapped for breach of confidentiality",
+    ]);
+    const { text } = await extractText(buffer, PDF_MIME);
+    const docs = new Map<string, string>([["doc_1", text]]);
+
+    const good = verifyAnswer(
+      {
+        value: "Confidentiality breach is uncapped.",
+        citations: [{ docId: "doc_1", quote: "Liability shall be uncapped for breach of confidentiality" }],
+        confidence: 0.9,
+      },
+      docs,
+    );
+    expect(good.citations[0].verified).toBe(true);
+    expect(good.citations[0].page).toBe(2);
+    expect(good.confidence).toBe(0.9);
+
+    const bad = verifyAnswer(
+      {
+        value: "It is capped.",
+        citations: [{ docId: "doc_1", quote: "Liability is capped at the fees paid in the last twelve months" }],
+        confidence: 0.9,
+      },
+      docs,
+    );
+    expect(bad.citations[0].verified).toBe(false);
+    expect(bad.confidence).toBe(FAILED_CITATION_CONFIDENCE_CAP);
   });
 });
