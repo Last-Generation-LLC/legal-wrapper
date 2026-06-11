@@ -59,6 +59,17 @@ function request(body: unknown): Request {
   });
 }
 
+/** Script the mocked model so doStream REJECTS with the given error. */
+function scriptModelReject(err: Error) {
+  vi.mocked(languageModelFor).mockReturnValue(
+    new MockLanguageModelV3({
+      doStream: async () => {
+        throw err;
+      },
+    }) as unknown as ReturnType<typeof languageModelFor>,
+  );
+}
+
 /** Script the mocked model to stream the given text in two deltas. */
 function scriptModel(fullText: string) {
   const mid = Math.floor(fullText.length / 2);
@@ -225,5 +236,21 @@ describe("POST /api/assistant/chat — streaming", () => {
     expect(systemText.indexOf("===== DOCUMENT")).toBeLessThan(
       systemText.indexOf("Citations and confidence"),
     );
+  });
+
+  it("maps a context-ceiling doStream rejection to a legible SSE error, not raw internals", async () => {
+    vi.mocked(prisma.document.findMany).mockResolvedValue([DOC]);
+    scriptModelReject(
+      new Error("prompt is too long: 250000 tokens > 200000 maximum"),
+    );
+
+    const res = await POST(request(validBody()));
+    expect(res.status).toBe(200); // stream already opened; error rides SSE
+    const sse = await res.text();
+
+    // onError must have mapped the message to the human-readable ceiling text.
+    expect(sse).toContain("exceed the model's context window");
+    // Raw token counts from the original error must NOT leak to the client.
+    expect(sse).not.toContain("250000");
   });
 });

@@ -5,6 +5,7 @@ import {
   createUIMessageStreamResponse,
   streamText,
   validateUIMessages,
+  MessageConversionError,
   TypeValidationError,
   type ModelMessage,
   type UIMessage,
@@ -93,12 +94,30 @@ export async function POST(request: Request) {
 
   // Conversion can throw even after validateUIMessages passes — a history
   // part the model API can't accept is a client-content problem, so keep the
-  // structured-400 contract rather than leaking an opaque 500.
+  // structured-400 contract rather than leaking an opaque 500. Any other
+  // error (SDK-internal bug, unexpected throw) is rethrown so it surfaces as
+  // a 500, not a misleading client-fault 400.
   let modelMessages: ModelMessage[];
   try {
     modelMessages = await convertToModelMessages(messages);
-  } catch {
-    return error("messages could not be converted for the model.", 400);
+  } catch (err) {
+    if (MessageConversionError.isInstance(err)) {
+      return error("messages could not be converted for the model.", 400);
+    }
+    throw err;
+  }
+
+  // Errors arrive mid-stream (the response is already 200 by then). Map
+  // them to a legible message — the context-ceiling case especially, since
+  // #15's guardrails don't exist yet. Extracted as a named const so it can
+  // be forwarded into toUIMessageStream() and createUIMessageStream() with
+  // a consistent type ((error: unknown) => string).
+  function mapStreamError(err: unknown): string {
+    const msg = err instanceof Error ? err.message : String(err);
+    if (/prompt is too long|context|maximum.*tokens/i.test(msg)) {
+      return "The selected documents exceed the model's context window. Deselect some documents and try again.";
+    }
+    return `The model call failed: ${msg}`;
   }
 
   const stream = createUIMessageStream({
@@ -110,7 +129,13 @@ export async function POST(request: Request) {
         maxOutputTokens: MAX_OUTPUT_TOKENS,
         // Single-shot by construction: no tools, no stopWhen/steps.
       });
-      writer.merge(result.toUIMessageStream());
+      // Forward mapStreamError into toUIMessageStream so that model-level
+      // errors (e.g. context-ceiling rejections surfaced as { type: "error" }
+      // parts in fullStream) are formatted by the same handler rather than
+      // leaking raw SDK messages. toUIMessageStream's onError formats the
+      // errorText for each error part it enqueues; without this it defaults
+      // to its own getErrorMessage, which returns the raw error string.
+      writer.merge(result.toUIMessageStream({ onError: mapStreamError }));
 
       // `result.text` resolves when generation completes, and (verified
       // against ai@6.0.202: createUIMessageStream pushes this execute promise
@@ -126,8 +151,8 @@ export async function POST(request: Request) {
       } catch {
         // result.text rejects on stream errors / no output (verified in the
         // SDK source: `_steps.reject`). The merged UI stream already carried
-        // an error part through onError below; rethrowing here would enqueue
-        // a duplicate. Degrade silently: no data part.
+        // an error part through mapStreamError above; rethrowing here would
+        // enqueue a duplicate. Degrade silently: no data part.
         return;
       }
 
@@ -146,16 +171,7 @@ export async function POST(request: Request) {
         data: verifyAnswer({ value, ...footer }, docTextById),
       });
     },
-    // Errors arrive mid-stream (the response is already 200 by then). Map
-    // them to a legible message — the context-ceiling case especially, since
-    // #15's guardrails don't exist yet.
-    onError: (err) => {
-      const msg = err instanceof Error ? err.message : String(err);
-      if (/prompt is too long|context|maximum.*tokens/i.test(msg)) {
-        return "The selected documents exceed the model's context window. Deselect some documents and try again.";
-      }
-      return `The model call failed: ${msg}`;
-    },
+    onError: mapStreamError,
   });
 
   return createUIMessageStreamResponse({ stream });
