@@ -79,9 +79,10 @@ export async function extractText(
       : await extractDocx(buffer);
 
   // The empty-extraction guard: a right-typed file that yields no text is
-  // almost always a scanned/image-only PDF. Treat it as an error, never as a
-  // valid empty document.
-  if (result.text.length === 0) {
+  // almost always a scanned/image-only PDF. Page markers are not content, so
+  // strip them before judging emptiness (a marker-only PDF is still "empty").
+  const contentOnly = result.text.replace(PAGE_MARKER, "").trim();
+  if (contentOnly.length === 0) {
     throw new ExtractionError(
       "No extractable text found. The file may be a scanned image or have no text layer; OCR is not supported.",
     );
@@ -91,9 +92,10 @@ export async function extractText(
 }
 
 // pdf-parse v2 interleaves a "-- N of M --" separator line between pages in
-// getText().text. We strip them so (a) the empty-text guard can actually
-// detect a scanned/text-less PDF (which would otherwise contain only these
-// markers), and (b) we don't feed pdf-parse's own page chrome to Claude.
+// getText().text. We keep these markers in the STORED text so citation page
+// numbers are derivable and verifiable downstream (decision d2). The
+// empty-extraction guard in extractText() strips them only for its own
+// emptiness check — a marker-only PDF is still "empty".
 const PAGE_MARKER = /^\s*-- \d+ of \d+ --\s*$/gm;
 
 async function extractPdf(buffer: Buffer): Promise<ExtractionResult> {
@@ -102,7 +104,10 @@ async function extractPdf(buffer: Buffer): Promise<ExtractionResult> {
   const parser = new PDFParse({ data: buffer });
   try {
     const result = await parser.getText();
-    const text = result.text.replace(PAGE_MARKER, "").trim();
+    // d2: keep pdf-parse's "-- N of M --" page markers in the STORED text so
+    // citation page numbers are derivable/verifiable downstream. The empty
+    // guard in extractText() strips them only for its own check.
+    const text = result.text.trim();
     return { text, pageCount: result.total };
   } catch (err) {
     throw new ExtractionError(
