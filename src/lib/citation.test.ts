@@ -14,6 +14,12 @@ describe("verifyCitation", () => {
     expect(verifyCitation("liability shall be uncapped for breach", docText)).toBe(true);
   });
 
+  it("normalizes the quote side too (a quote with its own linebreak still matches)", () => {
+    // Proves BOTH sides of the comparison are normalized — guards against a
+    // regression where only docText is normalized and the raw quote is used.
+    expect(verifyCitation("uncapped for\nbreach", docText)).toBe(true);
+  });
+
   it("rejects a fabricated quote not present in the text", () => {
     expect(verifyCitation("liability is capped at fees paid", docText)).toBe(false);
   });
