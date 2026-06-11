@@ -70,6 +70,9 @@ export const TOKEN_COUNT_MODEL = MODELS.assistant;
  * built with that key and never memoized (a user's key must not leak into the
  * shared singleton). When omitted, the provider reads ANTHROPIC_API_KEY from
  * the environment lazily at call time and is memoized like getAnthropic().
+ * Passing `{}` defers the key read to the first HTTP request — `@ai-sdk/anthropic`
+ * reads `ANTHROPIC_API_KEY` inside its request-headers closure, not at
+ * construction time.
  */
 export function getAnthropicProvider(apiKey?: string): AnthropicProvider {
   if (apiKey !== undefined) {
@@ -82,6 +85,6 @@ export function getAnthropicProvider(apiKey?: string): AnthropicProvider {
 }
 
 /** Resolve a streaming-capable LanguageModel for a role through the seam. */
-export function languageModelFor(role: ModelRole, apiKey?: string) {
+export function languageModelFor(role: ModelRole, apiKey?: string): ReturnType<AnthropicProvider> {
   return getAnthropicProvider(apiKey)(modelFor(role));
 }
