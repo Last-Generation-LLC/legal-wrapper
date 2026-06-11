@@ -42,12 +42,14 @@ function documentName(doc: Pick<Document, "filename" | "title">): string {
 
 /**
  * Render the selected documents into the block that replaces `{{DOCUMENTS}}`.
- * Each doc becomes `===== DOCUMENT: <name> =====` then its full extracted text;
- * blocks are joined by a blank line in selection order.
+ * Each doc becomes `===== DOCUMENT: <name> (id: <id>) =====` then its full
+ * extracted text; blocks are joined by a blank line in selection order. The
+ * Prisma id is shown so the model can cite a `docId` that `verifyAnswer` can
+ * actually look up — without it, citations could never verify.
  */
 export function renderDocuments(docs: Document[]): string {
   return docs
-    .map((d) => `===== DOCUMENT: ${documentName(d)} =====\n${d.extractedText}`)
+    .map((d) => `===== DOCUMENT: ${documentName(d)} (id: ${d.id}) =====\n${d.extractedText}`)
     .join("\n\n");
 }
 

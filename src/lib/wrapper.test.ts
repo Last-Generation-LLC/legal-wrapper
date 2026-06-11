@@ -45,25 +45,32 @@ describe("templateHasDocumentsToken", () => {
 });
 
 describe("renderDocuments", () => {
+  it("includes the document's Prisma id in the header so citations can name it", () => {
+    const out = renderDocuments([
+      doc({ id: "doc_abc123", filename: "msa.pdf", title: null, extractedText: "x" }),
+    ]);
+    expect(out).toBe("===== DOCUMENT: msa.pdf (id: doc_abc123) =====\nx");
+  });
+
   it("renders a single doc with the delimited header and full text", () => {
     const out = renderDocuments([
       doc({ filename: "msa.pdf", title: null, extractedText: "MSA text here" }),
     ]);
-    expect(out).toBe("===== DOCUMENT: msa.pdf =====\nMSA text here");
+    expect(out).toBe("===== DOCUMENT: msa.pdf (id: d_test) =====\nMSA text here");
   });
 
   it("prefers title over filename when title is present", () => {
     const out = renderDocuments([
       doc({ filename: "msa.pdf", title: "Master Services Agreement", extractedText: "x" }),
     ]);
-    expect(out).toContain("===== DOCUMENT: Master Services Agreement =====");
+    expect(out).toContain("===== DOCUMENT: Master Services Agreement (id: d_test) =====");
   });
 
   it("falls back to filename when title is blank/whitespace", () => {
     const out = renderDocuments([
       doc({ filename: "nda.docx", title: "   ", extractedText: "y" }),
     ]);
-    expect(out).toContain("===== DOCUMENT: nda.docx =====");
+    expect(out).toContain("===== DOCUMENT: nda.docx (id: d_test) =====");
   });
 
   it("joins multiple docs with a blank line, preserving order", () => {
@@ -72,7 +79,7 @@ describe("renderDocuments", () => {
       doc({ filename: "b.pdf", extractedText: "BBB" }),
     ]);
     expect(out).toBe(
-      "===== DOCUMENT: a.pdf =====\nAAA\n\n===== DOCUMENT: b.pdf =====\nBBB",
+      "===== DOCUMENT: a.pdf (id: d_test) =====\nAAA\n\n===== DOCUMENT: b.pdf (id: d_test) =====\nBBB",
     );
   });
 
@@ -85,7 +92,7 @@ describe("composeSystemPrompt", () => {
   it("substitutes the rendered block for the token using the default template", () => {
     const out = composeSystemPrompt([doc({ filename: "a.pdf", extractedText: "AAA" })]);
     expect(out).not.toContain("{{DOCUMENTS}}"); // token consumed
-    expect(out).toContain("===== DOCUMENT: a.pdf =====\nAAA");
+    expect(out).toContain("===== DOCUMENT: a.pdf (id: d_test) =====\nAAA");
     expect(out).toContain("You are a contract review assistant"); // rest of prompt intact
   });
 
@@ -94,7 +101,7 @@ describe("composeSystemPrompt", () => {
       [doc({ filename: "a.pdf", extractedText: "AAA" })],
       "Custom prompt.\n{{DOCUMENTS}}",
     );
-    expect(out).toBe("Custom prompt.\n===== DOCUMENT: a.pdf =====\nAAA");
+    expect(out).toBe("Custom prompt.\n===== DOCUMENT: a.pdf (id: d_test) =====\nAAA");
   });
 
   it("appends the documents block when an edited template omits the token", () => {
@@ -103,7 +110,7 @@ describe("composeSystemPrompt", () => {
       "Edited prompt with no token.",
     );
     expect(out).toBe(
-      "Edited prompt with no token.\n\n# Attached documents\n===== DOCUMENT: a.pdf =====\nAAA",
+      "Edited prompt with no token.\n\n# Attached documents\n===== DOCUMENT: a.pdf (id: d_test) =====\nAAA",
     );
   });
 
@@ -135,7 +142,7 @@ describe("composeAssistantSystemPrompt", () => {
     const template = `Custom prompt.\n{{DOCUMENTS}}`;
     const result = composeAssistantSystemPrompt([msa], template);
     expect(result).toBe(
-      `Custom prompt.\n===== DOCUMENT: msa.pdf =====\nThe term of this Agreement is five (5) years.\n\n${assistantPromptStrategy()}`,
+      `Custom prompt.\n===== DOCUMENT: msa.pdf (id: d_test) =====\nThe term of this Agreement is five (5) years.\n\n${assistantPromptStrategy()}`,
     );
   });
 

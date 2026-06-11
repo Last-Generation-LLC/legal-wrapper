@@ -217,7 +217,10 @@ describe("POST /api/assistant/chat — streaming", () => {
       .value as MockLanguageModelV3;
     const call = mock.doStreamCalls[0];
     const systemText = JSON.stringify(call.prompt);
-    expect(systemText).toContain("===== DOCUMENT: msa.pdf =====");
+    expect(systemText).toContain("===== DOCUMENT: msa.pdf (id: doc1) =====");
+    // The doc's Prisma id must be visible to the model — citations name docs
+    // by id, and verifyAnswer looks quotes up by that same id (bug B).
+    expect(systemText).toContain("(id: doc1)");
     expect(systemText).toContain("Citations and confidence");
     expect(systemText.indexOf("===== DOCUMENT")).toBeLessThan(
       systemText.indexOf("Citations and confidence"),
