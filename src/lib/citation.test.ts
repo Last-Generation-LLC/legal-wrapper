@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { normalizeWhitespace, verifyCitation } from "@/lib/citation";
+import { normalizeWhitespace, verifyCitation, derivePage } from "@/lib/citation";
 
 describe("normalizeWhitespace", () => {
   it("collapses runs of whitespace and trims", () => {
@@ -27,5 +27,25 @@ describe("verifyCitation", () => {
   it("rejects an empty quote", () => {
     expect(verifyCitation("", docText)).toBe(false);
     expect(verifyCitation("   ", docText)).toBe(false);
+  });
+});
+
+describe("derivePage", () => {
+  // Trailing markers, matching real pdf-parse output: each "-- N of M --"
+  // FOLLOWS the content of page N.
+  const paged =
+    "Recitals and definitions here.\n-- 1 of 2 --\nLiability shall be uncapped for breach.\n-- 2 of 2 --";
+
+  it("returns the page the quote falls under", () => {
+    expect(derivePage(paged, "Liability shall be uncapped for breach")).toBe(2);
+    expect(derivePage(paged, "Recitals and definitions here")).toBe(1);
+  });
+
+  it("returns undefined when the quote is absent", () => {
+    expect(derivePage(paged, "no such text anywhere")).toBeUndefined();
+  });
+
+  it("returns undefined when there are no page markers (DOCX / pre-existing docs)", () => {
+    expect(derivePage("Plain docx text with no markers at all.", "Plain docx text")).toBeUndefined();
   });
 });
