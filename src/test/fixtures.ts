@@ -30,3 +30,17 @@ export async function makeDocx(text: string): Promise<Buffer> {
   });
   return await Packer.toBuffer(doc);
 }
+
+/**
+ * Build a multi-page PDF — one page per entry in `pages`. An empty string
+ * yields a page with no drawn text (used to simulate a scanned/text-less page).
+ */
+export async function makeMultiPagePdf(pages: string[]): Promise<Buffer> {
+  const doc = await PDFDocument.create();
+  const font = await doc.embedFont(StandardFonts.Helvetica);
+  for (const text of pages) {
+    const page = doc.addPage([612, 792]);
+    if (text.length > 0) page.drawText(text, { x: 50, y: 700, size: 18, font });
+  }
+  return Buffer.from(await doc.save());
+}
