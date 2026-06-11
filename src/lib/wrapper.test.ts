@@ -134,8 +134,9 @@ describe("composeAssistantSystemPrompt", () => {
   it("is the filled template, then a blank line, then the strategy — nothing else", () => {
     const template = `Custom prompt.\n{{DOCUMENTS}}`;
     const result = composeAssistantSystemPrompt([msa], template);
-    const expectedHead = composeSystemPrompt([msa], template);
-    expect(result).toBe(`${expectedHead}\n\n${assistantPromptStrategy()}`);
+    expect(result).toBe(
+      `Custom prompt.\n===== DOCUMENT: msa.pdf =====\nThe term of this Agreement is five (5) years.\n\n${assistantPromptStrategy()}`,
+    );
   });
 
   it("defaults to DEFAULT_SYSTEM_PROMPT when no template is given", () => {
