@@ -105,3 +105,48 @@ export function assistantPromptStrategy(): string {
 - Write your answer as ordinary prose for the user to read.
 - AFTER the prose, append a machine-readable footer on its own lines: the marker ${FOOTER_OPEN}, then a single JSON object {"citations": [ {"docId": "...", "quote": "...", "section": "..."} ], "confidence": 0.0}, then the marker ${FOOTER_CLOSE}. Put nothing after the closing marker.`;
 }
+
+/** Result of splitting a (possibly streaming) Assistant message into prose + footer. */
+export interface ParsedAssistant {
+  /** The prose answer with the footer removed. */
+  value: string;
+  /** The parsed footer, or null if absent, not yet closed, or malformed. */
+  footer: RawFooter | null;
+}
+
+/**
+ * Build the Anthropic tool definition the Review grid forces (decision d5). The
+ * input schema is generated from RawAnswerSchema so the shape has ONE source of
+ * truth. #11 passes this with tool_choice { type: "tool", name: REVIEW_TOOL_NAME }.
+ */
+export function buildReviewTool() {
+  return {
+    name: REVIEW_TOOL_NAME,
+    description:
+      "Submit the grounded answer with supporting verbatim citations and a document-support confidence score.",
+    input_schema: z.toJSONSchema(RawAnswerSchema) as Record<string, unknown>,
+  };
+}
+
+/**
+ * Split a (possibly mid-stream) Assistant message into prose `value` and the
+ * parsed footer. Tolerant by design (risk n8): no footer, an unclosed footer
+ * still streaming, or malformed JSON all return `footer: null` without throwing
+ * — only a complete, well-formed, schema-valid footer parses.
+ */
+export function parseAssistantFooter(text: string): ParsedAssistant {
+  const openIdx = text.indexOf(FOOTER_OPEN);
+  if (openIdx === -1) return { value: text.trim(), footer: null };
+
+  const value = text.slice(0, openIdx).trim();
+  const closeIdx = text.indexOf(FOOTER_CLOSE, openIdx + FOOTER_OPEN.length);
+  if (closeIdx === -1) return { value, footer: null }; // not closed yet (streaming)
+
+  const json = text.slice(openIdx + FOOTER_OPEN.length, closeIdx).trim();
+  try {
+    const parsed = RawFooterSchema.safeParse(JSON.parse(json));
+    return { value, footer: parsed.success ? parsed.data : null };
+  } catch {
+    return { value, footer: null }; // malformed JSON — degrade, don't throw
+  }
+}

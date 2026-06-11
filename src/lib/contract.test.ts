@@ -8,6 +8,8 @@ import {
   FOOTER_OPEN,
   FOOTER_CLOSE,
   REVIEW_TOOL_NAME,
+  buildReviewTool,
+  parseAssistantFooter,
 } from "@/lib/contract";
 
 describe("RawAnswerSchema", () => {
@@ -72,5 +74,46 @@ describe("prompt strategies", () => {
 
   it("the review strategy points at the tool", () => {
     expect(reviewPromptStrategy()).toContain(REVIEW_TOOL_NAME);
+  });
+});
+
+describe("buildReviewTool", () => {
+  it("produces an Anthropic tool with a JSON-Schema input", () => {
+    const tool = buildReviewTool();
+    expect(tool.name).toBe(REVIEW_TOOL_NAME);
+    expect(typeof tool.description).toBe("string");
+    const schema = tool.input_schema as { type: string; properties: Record<string, unknown>; required?: string[] };
+    expect(schema.type).toBe("object");
+    expect(Object.keys(schema.properties)).toEqual(expect.arrayContaining(["value", "citations", "confidence"]));
+    expect(schema.required).toEqual(expect.arrayContaining(["value", "citations", "confidence"]));
+  });
+});
+
+describe("parseAssistantFooter", () => {
+  const footer = `${FOOTER_OPEN}\n{"citations":[{"docId":"doc_1","quote":"liability shall be uncapped"}],"confidence":0.8}\n${FOOTER_CLOSE}`;
+
+  it("splits prose from a complete footer", () => {
+    const result = parseAssistantFooter(`Here is the answer.\n\n${footer}`);
+    expect(result.value).toBe("Here is the answer.");
+    expect(result.footer?.confidence).toBe(0.8);
+    expect(result.footer?.citations[0].docId).toBe("doc_1");
+  });
+
+  it("returns null footer and full text when no footer present", () => {
+    const result = parseAssistantFooter("Just prose, still streaming");
+    expect(result.value).toBe("Just prose, still streaming");
+    expect(result.footer).toBeNull();
+  });
+
+  it("returns null footer when the footer is not yet closed (mid-stream)", () => {
+    const result = parseAssistantFooter(`Answer.\n${FOOTER_OPEN}\n{"citations":[`);
+    expect(result.value).toBe("Answer.");
+    expect(result.footer).toBeNull();
+  });
+
+  it("returns null footer (not a throw) on malformed JSON", () => {
+    const result = parseAssistantFooter(`Answer.\n${FOOTER_OPEN}\nnot json at all\n${FOOTER_CLOSE}`);
+    expect(result.value).toBe("Answer.");
+    expect(result.footer).toBeNull();
   });
 });
