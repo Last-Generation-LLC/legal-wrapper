@@ -18,7 +18,9 @@ import {
  * Cell text is model-derived from UNTRUSTED documents; without the guard a
  * crafted document could smuggle `=HYPERLINK(...)` into a cell that executes
  * when the export is opened in Excel/Sheets. The apostrophe prefix is the
- * spreadsheet convention for "treat as text".
+ * spreadsheet convention for "treat as text". Cosmetic tradeoff: Excel shows
+ * the apostrophe literally when OPENING (not typing) a CSV, so a guarded
+ * value like "-5 days" renders as "'-5 days" — accepted, security wins.
  */
 export function csvField(value: string): string {
   const guarded = /^[=+\-@\t\r]/.test(value) ? `'${value}` : value;
@@ -70,5 +72,7 @@ export function downloadCsv(csv: string, filename: string): void {
   a.href = url;
   a.download = filename;
   a.click();
-  URL.revokeObjectURL(url);
+  // Deferred: revoking in the same tick has historically raced the download
+  // navigation in Firefox. A tick later is safe everywhere.
+  setTimeout(() => URL.revokeObjectURL(url), 0);
 }

@@ -74,6 +74,13 @@ describe("gridToCsv", () => {
     expect(csv.split("\r\n")[1]).toBe('d1.pdf,"Mutual, per ""Recitals""",0.95,');
   });
 
+  it("escapes user-typed column titles in the header row", () => {
+    const csv = gridToCsv([doc("d1")], [col("c1", 'Term, years "approx"')], {});
+    expect(csv.split("\r\n")[0]).toBe(
+      'Document,"Term, years ""approx""","Term, years ""approx"" · confidence","Term, years ""approx"" · citation"',
+    );
+  });
+
   it("uses the document title over the filename when set", () => {
     const csv = gridToCsv(
       [{ id: "d1", filename: "x.pdf", title: "Acme NDA" }],
