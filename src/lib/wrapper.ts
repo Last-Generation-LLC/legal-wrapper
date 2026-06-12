@@ -1,6 +1,6 @@
 import type { Document } from "@prisma/client";
 
-import { assistantPromptStrategy } from "@/lib/contract";
+import { assistantPromptStrategy, reviewPromptStrategy } from "@/lib/contract";
 
 /**
  * The literal token in the system prompt that the composer replaces with the
@@ -89,4 +89,40 @@ export function composeAssistantSystemPrompt(
   template: string = DEFAULT_SYSTEM_PROMPT,
 ): string {
   return `${composeSystemPrompt(docs, template)}\n\n${assistantPromptStrategy()}`;
+}
+
+/**
+ * The shipped default system prompt for Review grid cells. Tuned for the
+ * grid's shape: every answer lands in a small table cell, so brevity and a
+ * fixed "or say so" fallback beat prose. Editable at runtime like the
+ * Assistant default (transparency thesis); `{{DOCUMENTS}}` is filled per call
+ * with the SINGLE document under review.
+ */
+export const DEFAULT_REVIEW_SYSTEM_PROMPT = `You are extracting a specific answer from one legal document for a review grid.
+
+# Behavior
+- Answer ONLY the question asked, from the attached document alone.
+- Be concise: the answer goes in a table cell. One sentence or less when possible; follow any output format the question specifies.
+- If the document does not address the question, answer exactly "Not specified." — never guess.
+- Do not hedge with "I am not a lawyer." The user is a lawyer.
+
+# Attached document
+${DOCUMENTS_TOKEN}`;
+
+/**
+ * The COMPLETE Review-cell system prompt: the (possibly user-edited) template
+ * with the single document filled, then the forced-tool-use strategy block.
+ * Same fixed two-piece order as the Assistant composition.
+ *
+ * CACHE PREFIX INVARIANT: this string must be byte-identical for every cell
+ * against the same document (same template), because the route puts a
+ * cache_control breakpoint on it — the varying column prompt rides the user
+ * message AFTER the breakpoint. Keep anything per-call (timestamps, cell ids)
+ * out of here.
+ */
+export function composeReviewSystemPrompt(
+  doc: Document,
+  template: string = DEFAULT_REVIEW_SYSTEM_PROMPT,
+): string {
+  return `${composeSystemPrompt([doc], template)}\n\n${reviewPromptStrategy()}`;
 }

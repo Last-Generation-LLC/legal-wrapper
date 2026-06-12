@@ -6,8 +6,10 @@ import {
   renderDocuments,
   composeSystemPrompt,
   composeAssistantSystemPrompt,
+  composeReviewSystemPrompt,
+  DEFAULT_REVIEW_SYSTEM_PROMPT,
 } from "@/lib/wrapper";
-import { assistantPromptStrategy } from "@/lib/contract";
+import { assistantPromptStrategy, reviewPromptStrategy } from "@/lib/contract";
 import type { Document } from "@prisma/client";
 
 function doc(over: Partial<Document>): Document {
@@ -157,5 +159,31 @@ describe("composeAssistantSystemPrompt", () => {
     const result = composeAssistantSystemPrompt([], "Prompt.\n{{DOCUMENTS}}");
     expect(result).toContain("Prompt.");
     expect(result.endsWith(assistantPromptStrategy())).toBe(true);
+  });
+});
+
+describe("composeReviewSystemPrompt", () => {
+  const nda = doc({
+    filename: "nda.pdf",
+    extractedText: "Confidentiality obligations survive for three (3) years.",
+  });
+
+  it("is the filled template, then a blank line, then the REVIEW strategy", () => {
+    const template = `Review prompt.\n{{DOCUMENTS}}`;
+    const result = composeReviewSystemPrompt(nda, template);
+    expect(result).toBe(
+      `Review prompt.\n===== DOCUMENT: nda.pdf (id: d_test) =====\nConfidentiality obligations survive for three (3) years.\n\n${reviewPromptStrategy()}`,
+    );
+  });
+
+  it("defaults to DEFAULT_REVIEW_SYSTEM_PROMPT when no template is given", () => {
+    const result = composeReviewSystemPrompt(nda);
+    expect(result.startsWith(DEFAULT_REVIEW_SYSTEM_PROMPT.split("\n")[0])).toBe(true);
+    expect(result).toContain("Confidentiality obligations survive");
+    expect(result.endsWith(reviewPromptStrategy())).toBe(true);
+  });
+
+  it("is byte-stable for the same doc + template (the cache prefix invariant)", () => {
+    expect(composeReviewSystemPrompt(nda)).toBe(composeReviewSystemPrompt(nda));
   });
 });
