@@ -29,11 +29,21 @@ describe("PromptPanel", () => {
 
   it("explains the {{DOCUMENTS}} replacement in the footer note", () => {
     render(<Harness />);
+    const token = DOCUMENTS_TOKEN.replace(/[{}]/g, "\\$&");
     expect(
-      screen.getByText(new RegExp(`${DOCUMENTS_TOKEN}.*nothing\\s+is hidden from you`)),
+      screen.getByText(new RegExp(`${token}.*nothing\\s+is hidden from you`)),
     ).toBeInTheDocument();
     // No warnings while the token is present and the template is non-blank.
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  });
+
+  it("shows the fixed strategy appendix read-only — the honesty claim's other half", () => {
+    render(<Harness />);
+    // The appendix is rendered verbatim (in a <pre>, not the editable textarea).
+    expect(screen.getByText(/Citations and confidence/)).toBeInTheDocument();
+    expect(screen.getByText(/Appended after your template/)).toBeInTheDocument();
+    const textarea = screen.getByLabelText("System prompt template") as HTMLTextAreaElement;
+    expect(textarea.value).not.toContain("Citations and confidence");
   });
 
   it("warns when the token is removed, and that warning resolves on Reset", () => {
@@ -54,7 +64,7 @@ describe("PromptPanel", () => {
 
   it("copies the current template to the clipboard", async () => {
     const writeText = vi.fn().mockResolvedValue(undefined);
-    Object.assign(navigator, { clipboard: { writeText } });
+    vi.stubGlobal("navigator", { ...navigator, clipboard: { writeText } });
     render(<Harness />);
 
     fireEvent.click(screen.getByRole("button", { name: /Copy/ }));
