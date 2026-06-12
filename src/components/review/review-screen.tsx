@@ -19,6 +19,7 @@ import {
   type CellMap,
   type ReviewColumn,
 } from "@/lib/review-grid";
+import { csvFilename, downloadCsv, gridToCsv } from "@/lib/review-csv";
 import { ColumnHeader } from "./column-header";
 import { GridCell } from "./grid-cell";
 import { StatusBar } from "./status-bar";
@@ -73,6 +74,12 @@ export function ReviewScreen({ modelLabel }: { modelLabel: string }) {
     }
   }
 
+  // Exports the grid AS IT IS — running/idle cells come out empty, error
+  // cells say so. No await, no API calls: it's a serialization of state.
+  function handleExportCsv() {
+    downloadCsv(gridToCsv(docs, columns, cells), csvFilename(new Date()));
+  }
+
   function addColumn() {
     const col = newColumn();
     setColumns((cols) => [...cols, col]);
@@ -99,6 +106,15 @@ export function ReviewScreen({ modelLabel }: { modelLabel: string }) {
           <div className="flex items-center gap-2">
             <Pill tone="active">● {modelLabel}</Pill>
             <div className="mx-1 h-[18px] w-px bg-border" />
+            <Btn
+              variant="ghost"
+              size="sm"
+              icon="download"
+              disabled={docIds.length === 0 || columns.length === 0}
+              onClick={handleExportCsv}
+            >
+              CSV
+            </Btn>
             <Btn variant="primary" size="sm" icon="play" disabled={!canRun} onClick={() => void handleRunAll()}>
               {running ? "Running…" : "Run all"}
             </Btn>

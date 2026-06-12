@@ -5,7 +5,16 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { DocumentMeta } from "@/lib/documents";
 import { COLUMNS_STORAGE_KEY, STARTER_COLUMNS } from "@/lib/review-grid";
 import { DocsProvider, useDocs } from "@/components/documents/docs-context";
+import { downloadCsv } from "@/lib/review-csv";
 import { ReviewScreen } from "./review-screen";
+
+// The download helper touches Blob/object URLs/anchor clicks — mocked so the
+// screen test asserts WHAT would be exported, not browser plumbing (the
+// serialization itself is covered by review-csv.test.ts).
+vi.mock("@/lib/review-csv", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/review-csv")>()),
+  downloadCsv: vi.fn(),
+}));
 
 const doc = (id: string): DocumentMeta => ({
   id,
@@ -148,6 +157,27 @@ describe("ReviewScreen", () => {
     expect(screen.getByText("0 rows × 7 columns · 0 cells")).toBeInTheDocument();
     expect(screen.getByLabelText(/Column title/)).toBeInTheDocument();
     expect(screen.getByText(/No prompt yet/)).toBeInTheDocument();
+  });
+
+  it("disables CSV with no rows; exports the current grid state when clicked", async () => {
+    const fetchMock = vi.fn().mockImplementation(async () => cellResponse("Delaware"));
+    vi.stubGlobal("fetch", fetchMock);
+    const { unmount } = renderScreen([doc("d1")]);
+    expect(screen.getByRole("button", { name: /CSV/ })).toBeDisabled();
+    unmount();
+
+    renderScreen([doc("d1")], ["d1"]);
+    fireEvent.click(screen.getByRole("button", { name: /Run all/ }));
+    await waitFor(() => expect(screen.getByText("6/6 complete")).toBeInTheDocument());
+
+    fireEvent.click(screen.getByRole("button", { name: /CSV/ }));
+    expect(downloadCsv).toHaveBeenCalledTimes(1);
+    const [csv, filename] = vi.mocked(downloadCsv).mock.calls[0];
+    expect(filename).toMatch(/^review-grid-\d{4}-\d{2}-\d{2}\.csv$/);
+    const lines = csv.split("\r\n");
+    expect(lines[0]).toContain("Governing law · confidence");
+    expect(lines[1]).toContain("d1.pdf");
+    expect(lines[1]).toContain("Delaware");
   });
 
   it("loads previously stored columns instead of the starters", async () => {
