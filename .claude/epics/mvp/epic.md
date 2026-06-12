@@ -49,6 +49,8 @@ Maps to the four CLAUDE.md build phases:
 - **Phase 4** (polish, demo prep): 015–018
 
 ## Tasks
+- 23 — Reframe Assistant as general legal chat (copy + default system prompt) (medium, small)
+- 22 — Persist chat history to SQLite (save/restore Assistant thread) (high, medium)
 
 1. 001 — Project scaffold (Next.js 15 + TS + Tailwind + shadcn) (high, small)
 2. 002 — Prisma + SQLite schema (high, small) → depends on 001

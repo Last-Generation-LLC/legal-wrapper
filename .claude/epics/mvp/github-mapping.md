@@ -21,3 +21,5 @@
 | 016.md→17 | #17 | Cost + cache surfacing |
 | 017.md→18 | #18 | Empty states + error toasts |
 | 018.md→19 | #19 | README + demo corpora |
+| 22.md | #22 | Persist chat history to SQLite (save/restore Assistant thread) |
+| 23.md | #23 | Reframe Assistant as general legal chat (copy + default system prompt) |
