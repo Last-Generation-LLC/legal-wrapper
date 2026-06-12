@@ -15,18 +15,24 @@ export const CONTEXT_CEILING = 180_000;
 /** Fraction of the ceiling at which the UI starts warning. */
 export const CEILING_WARN_FRACTION = 0.8;
 
+/** Integer warn threshold — rounded once here so the band edge can't drift
+ * by a token if the ceiling ever changes to a value where ×0.8 is inexact. */
+export const CEILING_WARN_AT = Math.round(CONTEXT_CEILING * CEILING_WARN_FRACTION);
+
 export type CeilingState = "ok" | "warn" | "over";
 
 export function ceilingState(tokens: number): CeilingState {
   if (tokens > CONTEXT_CEILING) return "over";
-  if (tokens >= CONTEXT_CEILING * CEILING_WARN_FRACTION) return "warn";
+  if (tokens >= CEILING_WARN_AT) return "warn";
   return "ok";
 }
 
-/** "212.4k" — the meter's compact token formatting. */
-function compact(tokens: number): string {
+/** "212.4k" — compact token formatting, shared so every surface names the
+ * same number the same way (sidebar meter, block messages, 413 bodies). */
+export function compactTokens(tokens: number): string {
   return `${(tokens / 1000).toFixed(1)}k`;
 }
+const compact = compactTokens;
 
 /**
  * The blocking message for an over-ceiling selection — used verbatim by the

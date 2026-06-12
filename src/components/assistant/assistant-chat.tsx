@@ -115,9 +115,16 @@ export function AssistantChat({ modelLabel }: { modelLabel: string }) {
         status={status}
         error={error}
         documents={documents}
-        onRegenerate={(messageId) => void regenerate({ messageId, body: requestBody() })}
+        onRegenerate={(messageId) => {
+          // #16: regenerate rides the same ceiling gate as send — without it
+          // the server 413 surfaces as a raw JSON blob (review finding); the
+          // composer's red alert already explains why nothing happens.
+          if (blocked) return;
+          void regenerate({ messageId, body: requestBody() });
+        }}
         onEditPrompt={handleEditPrompt}
         onRetry={() => {
+          if (blocked) return;
           clearError();
           void regenerate({ body: requestBody() });
         }}

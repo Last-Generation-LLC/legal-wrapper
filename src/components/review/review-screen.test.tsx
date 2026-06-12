@@ -120,7 +120,9 @@ describe("ReviewScreen", () => {
     await waitFor(() => expect(screen.getByText("6 error")).toBeInTheDocument());
     // d1: 1 warm-up failure + 5 skipped; d2: 6 successes; only 7 actual calls.
     expect(fetchMock).toHaveBeenCalledTimes(7);
-    expect(screen.getByText(/Rate limited/)).toBeInTheDocument();
+    // All six of the doc's cells name the real reason: the warm cell directly,
+    // the five skipped cells via the threaded warm-failure message.
+    expect(screen.getAllByText(/Rate limited/)).toHaveLength(6);
     expect(screen.getAllByText(/cache warm-up/)).toHaveLength(5);
     expect(screen.getByRole("button", { name: /Run all/ })).toBeEnabled();
   });

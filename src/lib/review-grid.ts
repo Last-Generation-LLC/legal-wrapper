@@ -235,17 +235,20 @@ export async function runGrid(options: {
   const { docIds, columns, cells, runCell, onUpdate } = options;
   const semaphore = new Semaphore(options.concurrency ?? RUN_CONCURRENCY);
 
-  const runOne = (docId: string, col: ReviewColumn): Promise<boolean> =>
+  // Resolves to null on success, or the error message on failure (the warm
+  // cell's message is threaded into its doc's skipped cells so every affected
+  // cell says WHY it wasn't run — e.g. the #16 over-ceiling 413).
+  const runOne = (docId: string, col: ReviewColumn): Promise<string | null> =>
     semaphore.run(async () => {
       onUpdate(docId, col.id, { status: "running" });
       try {
         const { answer, usage } = await runCell(docId, col.prompt);
         onUpdate(docId, col.id, { status: "done", answer, usage, promptUsed: col.prompt });
-        return true;
+        return null;
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
         onUpdate(docId, col.id, { status: "error", message });
-        return false;
+        return message;
       }
     });
 
@@ -255,12 +258,12 @@ export async function runGrid(options: {
       if (queue.length === 0) return;
 
       const [warm, ...rest] = queue;
-      const warmed = await runOne(docId, warm);
-      if (!warmed) {
+      const warmError = await runOne(docId, warm);
+      if (warmError !== null) {
         for (const col of rest) {
           onUpdate(docId, col.id, {
             status: "error",
-            message: "Not run — the document's first cell failed (cache warm-up).",
+            message: `Not run — the document's first cell failed (cache warm-up): ${warmError}`,
           });
         }
         return;

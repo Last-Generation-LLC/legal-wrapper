@@ -2,7 +2,7 @@
 
 import { useRef } from "react";
 import { Btn } from "@/components/ui/btn";
-import { ceilingState, type CeilingState } from "@/lib/context-ceiling";
+import { ceilingState, compactTokens, type CeilingState } from "@/lib/context-ceiling";
 import { useDocs } from "./docs-context";
 import { useUpload } from "./use-upload";
 import { DocRow } from "./doc-row";
@@ -77,7 +77,7 @@ export function DocSidebar() {
           In Context · {selectedCount}
         </span>
         <span className={`font-mono text-[10.5px] ${COUNT_TEXT[state]}`}>
-          {(selectedTokens / 1000).toFixed(1)}k / {(ceiling / 1000).toFixed(0)}k
+          {compactTokens(selectedTokens)} / {compactTokens(ceiling)}
           {state === "warn" && " · near ceiling"}
           {state === "over" && " · over ceiling"}
         </span>

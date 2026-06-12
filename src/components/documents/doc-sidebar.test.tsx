@@ -38,9 +38,9 @@ describe("DocSidebar", () => {
   it("warns near the ceiling and flags red past it (#16)", () => {
     renderSidebar([doc("big", 150_000), doc("bigger", 50_000)]);
     fireEvent.click(screen.getByText("big.pdf"));
-    expect(screen.getByText(/150\.0k \/ 180k · near ceiling/)).toBeInTheDocument();
+    expect(screen.getByText(/150\.0k \/ 180\.0k · near ceiling/)).toBeInTheDocument();
     fireEvent.click(screen.getByText("bigger.pdf"));
-    expect(screen.getByText(/200\.0k \/ 180k · over ceiling/)).toBeInTheDocument();
+    expect(screen.getByText(/200\.0k \/ 180\.0k · over ceiling/)).toBeInTheDocument();
   });
 
   it("lists documents and updates the in-context count when a row is toggled", () => {
