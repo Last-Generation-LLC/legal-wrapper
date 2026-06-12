@@ -93,6 +93,22 @@ export function originatingUserMessage(
 }
 
 /**
+ * The user message an in-progress edit still targets, or null when it no
+ * longer can. The edited message can vanish between "Edit prompt" and send —
+ * e.g. a Regenerate on an EARLIER assistant message truncates the thread past
+ * it. Sending a messageId that is no longer in the thread makes sendMessage
+ * throw (and the draft would be lost), so the send falls back to appending
+ * and the composer drops its "editing" state when this returns null.
+ */
+export function resolveEditTarget(
+  messages: AssistantUIMessage[],
+  editingId: string | null,
+): string | null {
+  if (!editingId) return null;
+  return messages.some((m) => m.id === editingId) ? editingId : null;
+}
+
+/**
  * "claude-opus-4-8" → "OPUS 4.8" — the TopBar model pill label, derived from
  * the registry id so the pill can never drift from the model actually called.
  * Date-stamp suffixes (8+ digits) are not version segments and are dropped.

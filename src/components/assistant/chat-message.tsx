@@ -2,6 +2,7 @@ import * as React from "react";
 import { useState } from "react";
 import { Btn } from "@/components/ui/btn";
 import { Icon } from "@/components/ui/icon";
+import { Pill } from "@/components/ui/pill";
 import { docLabel } from "@/lib/doc-display";
 import type { DocumentMeta } from "@/lib/documents";
 import type { VerifiedCitation } from "@/lib/contract";
@@ -125,18 +126,10 @@ export function ChatMessage({
         {answer && answer.citations.length > 0 && (
           <div className="mt-2.5 flex flex-wrap gap-1.5">
             {answer.citations.map((c, i) => (
-              <span
-                key={i}
-                className={
-                  "inline-flex items-center gap-1.5 rounded-[3px] border px-2 py-[3px] font-mono text-[10.5px] " +
-                  (c.verified
-                    ? "border-[oklch(0.4_0.08_240_/_0.5)] bg-[oklch(0.22_0.02_240)] text-blue"
-                    : "border-[oklch(0.4_0.08_50_/_0.5)] bg-[oklch(0.24_0.04_50)] text-amber")
-                }
-              >
+              <Pill key={i} tone={c.verified ? "ctx" : "warn"} className="py-[3px]">
                 <Icon name="doc" size={10} />
                 {citationLabel(c, documents)}
-              </span>
+              </Pill>
             ))}
           </div>
         )}

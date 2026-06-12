@@ -12,6 +12,7 @@ import { DEFAULT_SYSTEM_PROMPT } from "@/lib/wrapper";
 import {
   displayText,
   originatingUserMessage,
+  resolveEditTarget,
   type AssistantUIMessage,
 } from "@/lib/chat-ui";
 import { ContextStrip } from "./context-strip";
@@ -31,11 +32,16 @@ export function AssistantChat({ modelLabel }: { modelLabel: string }) {
   // truncates the thread after it (locked decision; native sendMessage behavior).
   const [editingId, setEditingId] = useState<string | null>(null);
 
-  const { messages, status, error, sendMessage, regenerate, setMessages, clearError } =
+  const { messages, status, error, sendMessage, regenerate, setMessages, clearError, stop } =
     useChat<AssistantUIMessage>({
       transport: new DefaultChatTransport({ api: "/api/assistant/chat" }),
     });
   const busy = status === "submitted" || status === "streaming";
+
+  // The edit target can be truncated away before send (review finding): only
+  // an id still present in the thread is sent as a replacement — otherwise
+  // the draft falls back to a normal append and the editing pill drops.
+  const editTarget = resolveEditTarget(messages, editingId);
 
   // Attach = upload + select, so the new doc is in context for the next send.
   const { upload, uploading, error: uploadError } = useUpload((doc) => toggle(doc.id));
@@ -55,7 +61,7 @@ export function AssistantChat({ modelLabel }: { modelLabel: string }) {
       {
         text,
         metadata: { createdAt: Date.now() },
-        ...(editingId ? { messageId: editingId } : {}),
+        ...(editTarget ? { messageId: editTarget } : {}),
       },
       { body: requestBody() },
     );
@@ -70,7 +76,11 @@ export function AssistantChat({ modelLabel }: { modelLabel: string }) {
     setDraft(displayText(origin));
   }
 
-  function handleNewSession() {
+  async function handleNewSession() {
+    // Abort any in-flight stream FIRST (review finding): without stop(), the
+    // active response's chunks re-push the streaming assistant message into
+    // the just-cleared thread — and the Opus call keeps running.
+    await stop();
     setMessages([]);
     clearError();
     setDraft("");
@@ -87,7 +97,7 @@ export function AssistantChat({ modelLabel }: { modelLabel: string }) {
           <div className="flex items-center gap-2">
             <Pill tone="active">● {modelLabel}</Pill>
             <div className="mx-1 h-[18px] w-px bg-border" />
-            <Btn variant="ghost" size="sm" icon="plus" onClick={handleNewSession}>
+            <Btn variant="ghost" size="sm" icon="plus" onClick={() => void handleNewSession()}>
               New session
             </Btn>
           </div>
@@ -119,7 +129,7 @@ export function AssistantChat({ modelLabel }: { modelLabel: string }) {
         uploading={uploading}
         uploadError={uploadError}
         docCount={selectedCount}
-        editing={editingId !== null}
+        editing={editTarget !== null}
       />
     </>
   );

@@ -7,6 +7,7 @@ import {
   formatClock,
   estimateTokens,
   originatingUserMessage,
+  resolveEditTarget,
   modelDisplayLabel,
   type AssistantUIMessage,
 } from "./chat-ui";
@@ -150,6 +151,13 @@ describe("originatingUserMessage", () => {
       { id: "a0", role: "assistant", parts: [{ type: "text", text: "hi" }] },
     ];
     expect(originatingUserMessage(orphan, "a0")).toBeNull();
+  });
+
+  it("resolveEditTarget keeps the id while the message exists, drops it after truncation", () => {
+    expect(resolveEditTarget(thread, "u2")).toBe("u2");
+    // a regenerate on an earlier message truncated u2 away
+    expect(resolveEditTarget(thread.slice(0, 2), "u2")).toBeNull();
+    expect(resolveEditTarget(thread, null)).toBeNull();
   });
 });
 
