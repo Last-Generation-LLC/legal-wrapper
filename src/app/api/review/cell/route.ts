@@ -82,7 +82,7 @@ export async function POST(request: Request) {
   } catch (err) {
     if (err instanceof Anthropic.APIError) {
       const msg = err.message;
-      if (/prompt is too long|context|maximum.*tokens/i.test(msg)) {
+      if (err.status === 400 && /prompt is too long|context|maximum.*tokens/i.test(msg)) {
         return error(
           "This document exceeds the model's context window — it cannot be reviewed in one call.",
           413,
@@ -114,8 +114,11 @@ export async function POST(request: Request) {
   const answer = RawAnswerSchema.safeParse(toolUse.input);
   if (!answer.success) {
     const issue = answer.error.issues[0];
+    // stop_reason is the load-bearing clue (review finding): a max_tokens
+    // cutoff truncates the tool input mid-JSON, and without it the message
+    // reads like a contract bug when the fix is raising MAX_OUTPUT_TOKENS.
     return error(
-      `Model answer parse error: ${issue.path.join(".") || "input"} — ${issue.message}.`,
+      `Model answer parse error: ${issue.path.join(".") || "input"} — ${issue.message} (stop_reason: ${message.stop_reason}).`,
       502,
     );
   }

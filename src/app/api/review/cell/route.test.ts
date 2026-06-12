@@ -194,11 +194,37 @@ describe("POST /api/review/cell — debuggable errors", () => {
     vi.mocked(prisma.document.findUnique).mockResolvedValue(DOC);
   });
 
-  it("502 with a parse-error message when the tool input fails the contract", async () => {
-    scriptToolUse({ value: 42, citations: "nope" }); // schema-invalid
+  it("502 with a parse-error message naming the stop_reason when the tool input fails the contract", async () => {
+    // a max_tokens cutoff truncates the tool input mid-JSON — the stop_reason
+    // in the message is what tells the debugger to raise MAX_OUTPUT_TOKENS
+    // rather than hunt a contract bug.
+    const create = vi.fn().mockResolvedValue({
+      content: [{ type: "tool_use", id: "tu1", name: REVIEW_TOOL_NAME, input: { value: "partial" } }],
+      stop_reason: "max_tokens",
+      usage: USAGE,
+    });
+    vi.mocked(getAnthropic).mockReturnValue({
+      messages: { create },
+    } as unknown as ReturnType<typeof getAnthropic>);
+
     const res = await POST(request(validBody()));
     expect(res.status).toBe(502);
-    expect((await res.json()).error).toMatch(/parse error/i);
+    const { error } = await res.json();
+    expect(error).toMatch(/parse error/i);
+    expect(error).toContain("max_tokens");
+  });
+
+  it("coalesces null cache usage fields to 0 (doc under the cacheable minimum)", async () => {
+    scriptToolUse(GOOD_ANSWER, {
+      input_tokens: 900,
+      output_tokens: 40,
+      cache_read_input_tokens: null,
+      cache_creation_input_tokens: null,
+    });
+    const res = await POST(request(validBody()));
+    const body = await res.json();
+    expect(body.usage.cacheReadInputTokens).toBe(0);
+    expect(body.usage.cacheCreationInputTokens).toBe(0);
   });
 
   it("502 naming the stop_reason when the model returned no tool call", async () => {
