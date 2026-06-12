@@ -109,6 +109,15 @@ export function resolveEditTarget(
 }
 
 /**
+ * The template a send actually uses: the user's edit verbatim, unless it is
+ * blank — an empty system prompt can't be sent, so blank falls back to the
+ * shipped default (#11 decision; the panel shows a note when this applies).
+ */
+export function effectiveTemplate(template: string, fallback: string): string {
+  return template.trim().length > 0 ? template : fallback;
+}
+
+/**
  * "claude-opus-4-8" → "OPUS 4.8" — the TopBar model pill label, derived from
  * the registry id so the pill can never drift from the model actually called.
  * Date-stamp suffixes (8+ digits) are not version segments and are dropped.
