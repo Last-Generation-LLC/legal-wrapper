@@ -25,8 +25,9 @@ import { PromptPanel } from "./prompt-panel";
 // The Assistant screen below the sidebar: TopBar, context strip, thread,
 // composer. This is the single stateful entry — children are presentational.
 //
-// The chat history is IN-MEMORY by decision: it resets on reload.
-// Persistence to ChatSession/Message is a captured follow-up task (#22).
+// The chat history PERSISTS (#22): the server seeds `initialMessages` from
+// the active ChatSession, and the chat route writes every turn back. "New
+// session" archives the thread server-side; browsing the archive is #26.
 export function AssistantChat({
   modelLabel,
   initialMessages,

@@ -90,7 +90,8 @@ describe("loadActiveThread", () => {
     vi.mocked(prisma.message.findMany).mockResolvedValue([
       row("m0", "{not json", 0),
       row("mx", { id: "mx" }, 1), // missing role/parts
-      row("m1", good, 2),
+      row("mb", { id: "mb", role: "banana", parts: [] }, 2), // invalid role
+      row("m1", good, 3),
     ]);
     const thread = await loadActiveThread();
     expect(thread.messages).toEqual([good]);

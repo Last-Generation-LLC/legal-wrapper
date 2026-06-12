@@ -3,6 +3,7 @@ import {
   convertToModelMessages,
   createUIMessageStream,
   createUIMessageStreamResponse,
+  generateId,
   streamText,
   validateUIMessages,
   MessageConversionError,
@@ -10,7 +11,6 @@ import {
   type ModelMessage,
   type UIMessage,
 } from "ai";
-import { generateId } from "ai";
 import { prisma } from "@/lib/prisma";
 import { languageModelFor } from "@/lib/anthropic";
 import { appendMessage, getActiveSession, replaceThread } from "@/lib/chat-store";
@@ -219,25 +219,34 @@ export async function POST(request: Request) {
       // strips the footer on render), the verified data part, and the same
       // metadata shape messageMetadata emits. The id differs from the
       // client's in-memory id; the next turn's replace-all self-heals that.
-      const usage = await result.totalUsage;
-      await appendMessage(
-        session.id,
-        {
-          id: generateId(),
-          role: "assistant",
-          parts: [
-            { type: "text", text },
-            ...(verified ? [{ type: "data-citations" as const, data: verified }] : []),
-          ],
-          metadata: {
-            createdAt: Date.now(),
-            inputTokens: usage.inputTokens,
-            outputTokens: usage.outputTokens,
-            cachedInputTokens: usage.inputTokenDetails.cacheReadTokens,
+      // A persistence failure must NEVER masquerade as a model failure
+      // (review finding): the user just watched a complete answer stream in,
+      // and a throw here would route through mapStreamError as "The model
+      // call failed". Log and move on — the next turn's replace-all heals
+      // the missing row.
+      try {
+        const usage = await result.totalUsage;
+        await appendMessage(
+          session.id,
+          {
+            id: generateId(),
+            role: "assistant",
+            parts: [
+              { type: "text", text },
+              ...(verified ? [{ type: "data-citations" as const, data: verified }] : []),
+            ],
+            metadata: {
+              createdAt: Date.now(),
+              inputTokens: usage.inputTokens,
+              outputTokens: usage.outputTokens,
+              cachedInputTokens: usage.inputTokenDetails.cacheReadTokens,
+            },
           },
-        },
-        messages.length,
-      );
+          messages.length,
+        );
+      } catch (err) {
+        console.error("Failed to persist the finished assistant turn:", err);
+      }
     },
     onError: mapStreamError,
   });

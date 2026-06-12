@@ -34,7 +34,9 @@ function parseStoredMessage(content: string): AssistantUIMessage | null {
       typeof parsed === "object" &&
       parsed !== null &&
       typeof (parsed as { id?: unknown }).id === "string" &&
-      typeof (parsed as { role?: unknown }).role === "string" &&
+      ["user", "assistant", "system"].includes(
+        (parsed as { role?: unknown }).role as string,
+      ) &&
       Array.isArray((parsed as { parts?: unknown }).parts)
     ) {
       return parsed as AssistantUIMessage;
