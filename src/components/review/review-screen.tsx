@@ -53,6 +53,11 @@ export function ReviewScreen({ modelLabel }: { modelLabel: string }) {
 
   async function handleRunAll() {
     if (running) return;
+    // Close any open column editor first (review finding): its inputs are not
+    // individually disabled, so a panel left open could edit or delete a
+    // column mid-run and desync the run's promptUsed bookkeeping — and the
+    // disabled header toggle prevents reopening one until the run finishes.
+    setEditingColId(null);
     setRunning(true);
     try {
       await runGrid({
@@ -160,9 +165,17 @@ export function ReviewScreen({ modelLabel }: { modelLabel: string }) {
             </div>
           ))}
 
-          {docs.length === 0 && (
+          {/* "Add documents" points at the sidebar (locked decision) — the
+              handoff's button under the rows, rendered as a hint, plus a
+              taller empty state when there are no rows at all. */}
+          {docs.length === 0 ? (
             <div className="px-5 py-16 text-center font-mono text-[10.5px] leading-relaxed text-dim">
               Select documents in the sidebar to add rows.
+            </div>
+          ) : (
+            <div className="flex items-center gap-1.5 px-3.5 py-2.5 font-mono text-[10.5px] text-dim">
+              <Icon name="plus" size={11} />
+              Add documents — select them in the sidebar.
             </div>
           )}
         </div>

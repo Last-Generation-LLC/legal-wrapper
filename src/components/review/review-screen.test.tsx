@@ -74,6 +74,21 @@ describe("ReviewScreen", () => {
     expect(screen.getByText("2 rows × 6 columns · 12 cells")).toBeInTheDocument();
     expect(screen.getAllByText("—")).toHaveLength(12);
     expect(screen.getByRole("button", { name: /Run all/ })).toBeEnabled();
+    // The handoff's "Add documents" affordance points at the sidebar.
+    expect(screen.getByText(/Add documents — select them in the sidebar/)).toBeInTheDocument();
+  });
+
+  it("closes an open column editor when Run all starts", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockImplementation(async () => cellResponse("ok")));
+    renderScreen([doc("d1")], ["d1"]);
+
+    fireEvent.click(screen.getByText("Governing law"));
+    expect(screen.getByLabelText(/Column title/)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: /Run all/ }));
+    // Editor is gone immediately and cannot desync the run's bookkeeping.
+    expect(screen.queryByLabelText(/Column title/)).not.toBeInTheDocument();
+    await waitFor(() => expect(screen.getByText("6/6 complete")).toBeInTheDocument());
   });
 
   it("runs every cell on Run all and renders the results", async () => {
