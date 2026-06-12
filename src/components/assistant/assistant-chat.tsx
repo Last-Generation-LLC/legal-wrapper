@@ -12,6 +12,7 @@ import { ceilingState, overCeilingMessage } from "@/lib/context-ceiling";
 import { DEFAULT_SYSTEM_PROMPT } from "@/lib/wrapper";
 import {
   displayText,
+  effectiveTemplate,
   originatingUserMessage,
   resolveEditTarget,
   type AssistantUIMessage,
@@ -19,6 +20,7 @@ import {
 import { ContextStrip } from "./context-strip";
 import { MessageThread } from "./message-thread";
 import { Composer } from "./composer";
+import { PromptPanel } from "./prompt-panel";
 
 // The Assistant screen below the sidebar: TopBar, context strip, thread,
 // composer. This is the single stateful entry — children are presentational.
@@ -32,6 +34,12 @@ export function AssistantChat({ modelLabel }: { modelLabel: string }) {
   // When set, the draft edits this user message: sending replaces it and
   // truncates the thread after it (locked decision; native sendMessage behavior).
   const [editingId, setEditingId] = useState<string | null>(null);
+
+  // The transparency panel's template (#11): in-memory, survives "New session"
+  // (a setting, not a message), resets on reload. What the panel shows is what
+  // the next call sends — except blank, which falls back to the default.
+  const [template, setTemplate] = useState(DEFAULT_SYSTEM_PROMPT);
+  const [showPrompt, setShowPrompt] = useState(false);
 
   const { messages, status, error, sendMessage, regenerate, setMessages, clearError, stop } =
     useChat<AssistantUIMessage>({
@@ -48,11 +56,10 @@ export function AssistantChat({ modelLabel }: { modelLabel: string }) {
   const { upload, uploading, error: uploadError } = useUpload((doc) => toggle(doc.id));
 
   // docIds/template ride EVERY call as request-level body (evaluated at send
-  // time — hook-level body would go stale when the selection changes). The
-  // template is the shipped default until #11 makes it editable.
+  // time — hook-level body would go stale when the selection changes).
   const requestBody = () => ({
     docIds: selectedIds,
-    systemPromptTemplate: DEFAULT_SYSTEM_PROMPT,
+    systemPromptTemplate: effectiveTemplate(template, DEFAULT_SYSTEM_PROMPT),
   });
 
   // #16 guardrail: past the ceiling the call is BLOCKED client-side with a
@@ -102,6 +109,9 @@ export function AssistantChat({ modelLabel }: { modelLabel: string }) {
         right={
           <div className="flex items-center gap-2">
             <Pill tone="active">● {modelLabel}</Pill>
+            <Btn variant="ghost" size="sm" icon="eye" onClick={() => setShowPrompt((s) => !s)}>
+              {showPrompt ? "Hide" : "Show"} prompt
+            </Btn>
             <div className="mx-1 h-[18px] w-px bg-border" />
             <Btn variant="ghost" size="sm" icon="plus" onClick={() => void handleNewSession()}>
               New session
@@ -110,6 +120,13 @@ export function AssistantChat({ modelLabel }: { modelLabel: string }) {
         }
       />
       <ContextStrip docs={selectedDocs} />
+      {showPrompt && (
+        <PromptPanel
+          value={template}
+          onChange={setTemplate}
+          onReset={() => setTemplate(DEFAULT_SYSTEM_PROMPT)}
+        />
+      )}
       <MessageThread
         messages={messages}
         status={status}
