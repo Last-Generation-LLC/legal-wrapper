@@ -155,3 +155,14 @@
     @apply font-sans;
   }
 }
+
+/* Review grid running-cell shimmer (handoff `lls` keyframes) — used via
+   animate-[ll-shimmer_1.6s_ease-in-out_infinite] */
+@keyframes ll-shimmer {
+  0% {
+    transform: translateX(-120%);
+  }
+  100% {
+    transform: translateX(320%);
+  }
+}

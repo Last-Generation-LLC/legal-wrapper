@@ -1,12 +1,10 @@
-import { TopBar } from "@/components/layout/top-bar";
+import { ReviewScreen } from "@/components/review/review-screen";
+import { modelFor } from "@/lib/anthropic";
+import { modelDisplayLabel } from "@/lib/chat-ui";
 
+// Server Component shell: the model pill label comes from the registry
+// (single source of truth — the pill can't drift from the model the cell
+// route actually calls) and the client screen does the rest.
 export default function ReviewPage() {
-  return (
-    <>
-      <TopBar crumbs={["~/workspaces", "Review"]} />
-      <main className="flex flex-1 items-center justify-center text-[12.5px] text-dim">
-        Review — coming soon
-      </main>
-    </>
-  );
+  return <ReviewScreen modelLabel={modelDisplayLabel(modelFor("review"))} />;
 }

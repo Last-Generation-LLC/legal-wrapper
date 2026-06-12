@@ -1,26 +1,18 @@
 import * as React from "react";
 import { useState } from "react";
 import { Btn } from "@/components/ui/btn";
+import { ConfidenceDot } from "@/components/ui/confidence-dot";
 import { Icon } from "@/components/ui/icon";
 import { Pill } from "@/components/ui/pill";
 import { docLabel } from "@/lib/doc-display";
 import type { DocumentMeta } from "@/lib/documents";
 import type { VerifiedCitation } from "@/lib/contract";
 import {
-  confidenceTone,
   displayText,
   formatClock,
   verifiedAnswerOf,
   type AssistantUIMessage,
-  type ConfidenceTone,
 } from "@/lib/chat-ui";
-
-// Handoff: confidence dot bands map to the same color tokens as the grid.
-const DOT_BG: Record<ConfidenceTone, string> = {
-  ok: "bg-green",
-  warn: "bg-amber",
-  bad: "bg-red",
-};
 
 // Handoff: citation pills carry the doc name without its file extension.
 function citationDocName(citation: VerifiedCitation, documents: DocumentMeta[]): string {
@@ -103,10 +95,7 @@ export function ChatMessage({
           )}
           {answer && (
             <span className="inline-flex items-center gap-1.5">
-              <span
-                title="Document-support confidence"
-                className={`inline-block size-[7px] rounded-full ${DOT_BG[confidenceTone(answer.confidence)]}`}
-              />
+              <ConfidenceDot confidence={answer.confidence} />
               {answer.confidence.toFixed(2)}
             </span>
           )}

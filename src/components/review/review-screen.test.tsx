@@ -1,0 +1,147 @@
+// @vitest-environment jsdom
+import { useEffect, useRef } from "react";
+import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import type { DocumentMeta } from "@/lib/documents";
+import { COLUMNS_STORAGE_KEY, STARTER_COLUMNS } from "@/lib/review-grid";
+import { DocsProvider, useDocs } from "@/components/documents/docs-context";
+import { ReviewScreen } from "./review-screen";
+
+const doc = (id: string): DocumentMeta => ({
+  id,
+  filename: `${id}.pdf`,
+  title: null,
+  mimeType: "application/pdf",
+  tokenCount: 5000,
+  tokenCountEstimated: false,
+  createdAt: new Date(),
+});
+
+/** Test harness: selects the given doc ids once on mount (the sidebar's job). */
+function SelectDocs({ ids }: { ids: string[] }) {
+  const { toggle } = useDocs();
+  const applied = useRef(false);
+  useEffect(() => {
+    if (applied.current) return;
+    applied.current = true;
+    ids.forEach(toggle);
+  }, [ids, toggle]);
+  return null;
+}
+
+function renderScreen(documents: DocumentMeta[], selected: string[] = []) {
+  return render(
+    <DocsProvider documents={documents}>
+      <SelectDocs ids={selected} />
+      <ReviewScreen modelLabel="SONNET 4.6" />
+    </DocsProvider>,
+  );
+}
+
+function cellResponse(value: string) {
+  return Response.json({
+    answer: { value, citations: [], confidence: 0.95 },
+    usage: {
+      inputTokens: 100,
+      outputTokens: 10,
+      cacheReadInputTokens: 0,
+      cacheCreationInputTokens: 0,
+    },
+  });
+}
+
+beforeEach(() => {
+  window.localStorage.clear();
+  vi.unstubAllGlobals();
+});
+
+describe("ReviewScreen", () => {
+  it("seeds the six starter columns and shows the empty-rows hint with no selection", () => {
+    renderScreen([doc("d1")]);
+    for (const col of STARTER_COLUMNS) {
+      expect(screen.getByText(col.title)).toBeInTheDocument();
+    }
+    expect(screen.getByText(/Select documents in the sidebar/)).toBeInTheDocument();
+    expect(screen.getByText("0 rows × 6 columns · 0 cells")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Run all/ })).toBeDisabled();
+  });
+
+  it("renders one row per selected document with idle cells", () => {
+    renderScreen([doc("d1"), doc("d2"), doc("d3")], ["d1", "d2"]);
+    expect(screen.getByText("d1.pdf")).toBeInTheDocument();
+    expect(screen.getByText("d2.pdf")).toBeInTheDocument();
+    expect(screen.queryByText("d3.pdf")).not.toBeInTheDocument();
+    expect(screen.getByText("2 rows × 6 columns · 12 cells")).toBeInTheDocument();
+    expect(screen.getAllByText("—")).toHaveLength(12);
+    expect(screen.getByRole("button", { name: /Run all/ })).toBeEnabled();
+  });
+
+  it("runs every cell on Run all and renders the results", async () => {
+    const fetchMock = vi.fn().mockImplementation(async () => cellResponse("Delaware"));
+    vi.stubGlobal("fetch", fetchMock);
+    renderScreen([doc("d1"), doc("d2")], ["d1", "d2"]);
+
+    fireEvent.click(screen.getByRole("button", { name: /Run all/ }));
+
+    await waitFor(() => expect(screen.getByText("12/12 complete")).toBeInTheDocument());
+    expect(fetchMock).toHaveBeenCalledTimes(12);
+    expect(screen.getAllByText("Delaware")).toHaveLength(12);
+    expect(screen.getByText("12 done")).toBeInTheDocument();
+  });
+
+  it("shows error cells when a call fails and keeps Run all re-armed", async () => {
+    // Every call against d1 fails at the warm-up cell; d2 succeeds.
+    const fetchMock = vi.fn().mockImplementation(async (_url, init?: RequestInit) => {
+      const body = JSON.parse(String(init?.body)) as { docId: string };
+      return body.docId === "d1"
+        ? Response.json({ error: "Rate limited by the model API — retry shortly." }, { status: 429 })
+        : cellResponse("Mutual");
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    renderScreen([doc("d1"), doc("d2")], ["d1", "d2"]);
+
+    fireEvent.click(screen.getByRole("button", { name: /Run all/ }));
+
+    await waitFor(() => expect(screen.getByText("6 error")).toBeInTheDocument());
+    // d1: 1 warm-up failure + 5 skipped; d2: 6 successes; only 7 actual calls.
+    expect(fetchMock).toHaveBeenCalledTimes(7);
+    expect(screen.getByText(/Rate limited/)).toBeInTheDocument();
+    expect(screen.getAllByText(/cache warm-up/)).toHaveLength(5);
+    expect(screen.getByRole("button", { name: /Run all/ })).toBeEnabled();
+  });
+
+  it("opens the column editor, saves edits to localStorage, and deletes columns", async () => {
+    renderScreen([doc("d1")]);
+
+    fireEvent.click(screen.getByText("Governing law"));
+    const title = screen.getByLabelText(/Column title/);
+    fireEvent.change(title, { target: { value: "Choice of law" } });
+
+    await waitFor(() => {
+      const stored = JSON.parse(window.localStorage.getItem(COLUMNS_STORAGE_KEY)!);
+      expect(stored[0].title).toBe("Choice of law");
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: /Delete/ }));
+    expect(screen.queryByText("Choice of law")).not.toBeInTheDocument();
+    expect(screen.getByText("0 rows × 5 columns · 0 cells")).toBeInTheDocument();
+  });
+
+  it("adds a new column and opens its editor", () => {
+    renderScreen([doc("d1")]);
+    fireEvent.click(screen.getByRole("button", { name: /Add column/ }));
+    expect(screen.getByText("0 rows × 7 columns · 0 cells")).toBeInTheDocument();
+    expect(screen.getByLabelText(/Column title/)).toBeInTheDocument();
+    expect(screen.getByText(/No prompt yet/)).toBeInTheDocument();
+  });
+
+  it("loads previously stored columns instead of the starters", async () => {
+    window.localStorage.setItem(
+      COLUMNS_STORAGE_KEY,
+      JSON.stringify([{ id: "mine", title: "Cap on liability", prompt: "What is the cap?", width: 200 }]),
+    );
+    renderScreen([doc("d1")]);
+    await waitFor(() => expect(screen.getByText("Cap on liability")).toBeInTheDocument());
+    expect(screen.queryByText("Governing law")).not.toBeInTheDocument();
+  });
+});
