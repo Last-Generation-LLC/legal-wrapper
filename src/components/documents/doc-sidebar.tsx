@@ -1,9 +1,9 @@
 "use client";
 
-import { useRef, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRef } from "react";
 import { Btn } from "@/components/ui/btn";
 import { useDocs } from "./docs-context";
+import { useUpload } from "./use-upload";
 import { DocRow } from "./doc-row";
 
 export function DocSidebar() {
@@ -11,37 +11,16 @@ export function DocSidebar() {
     documents, selectedIds, toggle,
     selectedCount, selectedTokens, totalCount, totalTokens, ceiling,
   } = useDocs();
-  const router = useRouter();
   const inputRef = useRef<HTMLInputElement>(null);
-  const [uploading, setUploading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const { upload, uploading, error } = useUpload();
 
   // d5: fill fraction, clamped at 100%. No warn/block here — that's #16.
   const meterPct = Math.min(100, (selectedTokens / ceiling) * 100);
 
-  async function onFile(e: React.ChangeEvent<HTMLInputElement>) {
+  function onFile(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     e.target.value = ""; // reset so the same file can be re-picked later
-    if (!file) return;
-
-    setUploading(true);
-    setError(null);
-    try {
-      const body = new FormData();
-      body.append("file", file); // d7: single file per POST
-      const res = await fetch("/api/upload", { method: "POST", body });
-      if (!res.ok) {
-        // d8: surface the route's 400/413/422 { error } inline, never silently.
-        const data = await res.json().catch(() => null);
-        setError(data?.error ?? `Upload failed (${res.status}).`);
-        return;
-      }
-      router.refresh(); // d2: re-run the server fetch so the new doc appears
-    } catch {
-      setError("Upload failed — check your connection and try again.");
-    } finally {
-      setUploading(false);
-    }
+    if (file) void upload(file);
   }
 
   return (
