@@ -1,0 +1,161 @@
+import * as React from "react";
+import { useState } from "react";
+import { Btn } from "@/components/ui/btn";
+import { Icon } from "@/components/ui/icon";
+import { docLabel } from "@/lib/doc-display";
+import type { DocumentMeta } from "@/lib/documents";
+import type { VerifiedCitation } from "@/lib/contract";
+import {
+  confidenceTone,
+  displayText,
+  formatClock,
+  verifiedAnswerOf,
+  type AssistantUIMessage,
+  type ConfidenceTone,
+} from "@/lib/chat-ui";
+
+// Handoff: confidence dot bands map to the same color tokens as the grid.
+const DOT_BG: Record<ConfidenceTone, string> = {
+  ok: "bg-green",
+  warn: "bg-amber",
+  bad: "bg-red",
+};
+
+// Handoff: citation pills carry the doc name without its file extension.
+function citationDocName(citation: VerifiedCitation, documents: DocumentMeta[]): string {
+  const doc = documents.find((d) => d.id === citation.docId);
+  if (!doc) return citation.docId;
+  return docLabel(doc).replace(/\.(pdf|docx)$/i, "");
+}
+
+function citationLabel(citation: VerifiedCitation, documents: DocumentMeta[]): string {
+  let label = citationDocName(citation, documents);
+  if (citation.section) label += ` ${citation.section}`;
+  if (citation.page != null) label += ` · p.${citation.page}`;
+  if (!citation.verified) label += " · unverified";
+  return label;
+}
+
+// Handoff renderRich: **bold** spans become <strong>; everything else is
+// pre-wrapped plain text. Deliberately not a markdown renderer — the system
+// prompt asks for prose + bold only.
+function richText(text: string): React.ReactNode {
+  return text.split(/(\*\*[^*]+\*\*)/g).map((part, i) =>
+    part.startsWith("**") && part.endsWith("**") ? (
+      <strong key={i} className="font-semibold text-foreground">
+        {part.slice(2, -2)}
+      </strong>
+    ) : (
+      <React.Fragment key={i}>{part}</React.Fragment>
+    ),
+  );
+}
+
+export function ChatMessage({
+  message,
+  documents,
+  busy,
+  onRegenerate,
+  onEditPrompt,
+}: {
+  message: AssistantUIMessage;
+  documents: DocumentMeta[];
+  /** True while any call is in flight — regenerate/edit are disabled to avoid racing the stream. */
+  busy: boolean;
+  onRegenerate: () => void;
+  onEditPrompt: () => void;
+}) {
+  const isUser = message.role === "user";
+  const text = displayText(message);
+  const answer = isUser ? null : verifiedAnswerOf(message);
+  const meta = message.metadata;
+  const [copied, setCopied] = useState(false);
+
+  function onCopy() {
+    void navigator.clipboard.writeText(text).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    });
+  }
+
+  return (
+    <div className="mb-7 flex gap-3.5">
+      {/* Role tag — 28px column, mono uppercase; You = dim, LL = amber */}
+      <div
+        className={
+          "w-7 shrink-0 pt-0.5 font-mono text-[9.5px] font-medium uppercase tracking-[0.1em] " +
+          (isUser ? "text-dim" : "text-amber")
+        }
+      >
+        {isUser ? "You" : "LL"}
+      </div>
+
+      <div className="min-w-0 flex-1">
+        {/* Metadata line: timestamp · token accounting · confidence */}
+        <div className="mb-1.5 flex items-baseline gap-2.5 font-mono text-[10.5px] text-dim">
+          {meta?.createdAt != null && <span>{formatClock(meta.createdAt)}</span>}
+          {meta?.inputTokens != null && meta?.outputTokens != null && (
+            <span>
+              in {meta.inputTokens.toLocaleString()} · out {meta.outputTokens.toLocaleString()} · cached{" "}
+              {(meta.cachedInputTokens ?? 0).toLocaleString()}
+            </span>
+          )}
+          {answer && (
+            <span className="inline-flex items-center gap-1.5">
+              <span
+                title="Document-support confidence"
+                className={`inline-block size-[7px] rounded-full ${DOT_BG[confidenceTone(answer.confidence)]}`}
+              />
+              {answer.confidence.toFixed(2)}
+            </span>
+          )}
+        </div>
+
+        {/* Body — 13.5px / 1.6; user turns are muted, assistant turns full strength */}
+        <div
+          className={
+            "whitespace-pre-wrap text-[13.5px] leading-[1.6] " +
+            (isUser ? "text-muted-foreground" : "text-foreground")
+          }
+        >
+          {richText(text)}
+        </div>
+
+        {/* Citation pills — ctx (blue) when verified, warn (amber) when not */}
+        {answer && answer.citations.length > 0 && (
+          <div className="mt-2.5 flex flex-wrap gap-1.5">
+            {answer.citations.map((c, i) => (
+              <span
+                key={i}
+                className={
+                  "inline-flex items-center gap-1.5 rounded-[3px] border px-2 py-[3px] font-mono text-[10.5px] " +
+                  (c.verified
+                    ? "border-[oklch(0.4_0.08_240_/_0.5)] bg-[oklch(0.22_0.02_240)] text-blue"
+                    : "border-[oklch(0.4_0.08_50_/_0.5)] bg-[oklch(0.24_0.04_50)] text-amber")
+                }
+              >
+                <Icon name="doc" size={10} />
+                {citationLabel(c, documents)}
+              </span>
+            ))}
+          </div>
+        )}
+
+        {/* Actions — assistant turns only */}
+        {!isUser && (
+          <div className="mt-2.5 flex gap-1">
+            <Btn variant="ghost" size="sm" icon="copy" onClick={onCopy}>
+              {copied ? "Copied" : "Copy"}
+            </Btn>
+            <Btn variant="ghost" size="sm" icon="refresh" disabled={busy} onClick={onRegenerate}>
+              Regenerate
+            </Btn>
+            <Btn variant="ghost" size="sm" icon="edit" disabled={busy} onClick={onEditPrompt}>
+              Edit prompt
+            </Btn>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}

@@ -1,12 +1,11 @@
-import { TopBar } from "@/components/layout/top-bar";
+import { AssistantChat } from "@/components/assistant/assistant-chat";
+import { modelFor } from "@/lib/anthropic";
+import { modelDisplayLabel } from "@/lib/chat-ui";
 
+// Server Component shell: derives the model pill label from the registry
+// (single source of truth — the pill can't drift from the model actually
+// called) and hands off to the client chat. The sidebar + DocsProvider live
+// in the layout.
 export default function AssistantPage() {
-  return (
-    <>
-      <TopBar crumbs={["~/workspaces", "Assistant"]} />
-      <main className="flex flex-1 items-center justify-center text-[12.5px] text-dim">
-        Assistant — coming soon
-      </main>
-    </>
-  );
+  return <AssistantChat modelLabel={modelDisplayLabel(modelFor("assistant"))} />;
 }
