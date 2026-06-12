@@ -170,6 +170,21 @@ describe("POST /api/assistant/chat — streaming", () => {
     expect(sse).toContain('"confidence":0.9');
   });
 
+  it("attaches a timestamp and token usage as message metadata", async () => {
+    vi.mocked(prisma.document.findMany).mockResolvedValue([DOC]);
+    scriptModel("The term is five years.");
+
+    const res = await POST(request(validBody()));
+    const sse = await res.text();
+
+    // start event → createdAt; finish event → usage from the model's
+    // finish chunk (scriptModel: input 10 / output 20). #10's thread renders
+    // these as the per-message "in · out · cached" metadata line.
+    expect(sse).toContain('"createdAt"');
+    expect(sse).toContain('"inputTokens":10');
+    expect(sse).toContain('"outputTokens":20');
+  });
+
   it("degrades to prose-only when the footer is absent (no data part, no error)", async () => {
     vi.mocked(prisma.document.findMany).mockResolvedValue([DOC]);
     scriptModel("The term is five years. No footer here.");

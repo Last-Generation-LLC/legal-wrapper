@@ -15,6 +15,7 @@ import { languageModelFor } from "@/lib/anthropic";
 import { composeAssistantSystemPrompt } from "@/lib/wrapper";
 import { parseAssistantFooter } from "@/lib/contract";
 import { verifyAnswer } from "@/lib/citation";
+import type { AssistantUIMessage } from "@/lib/chat-ui";
 
 // The Anthropic call and Prisma are Node-only — never the Edge runtime.
 export const runtime = "nodejs";
@@ -135,7 +136,27 @@ export async function POST(request: Request) {
       // leaking raw SDK messages. toUIMessageStream's onError formats the
       // errorText for each error part it enqueues; without this it defaults
       // to its own getErrorMessage, which returns the raw error string.
-      writer.merge(result.toUIMessageStream({ onError: mapStreamError }));
+      //
+      // messageMetadata is invoked on the stream's start and finish events;
+      // the client MERGES the two returns (mergeObjects), so the timestamp
+      // survives the usage arriving later. cacheReadTokens stays 0/undefined
+      // until prompt caching lands (#17).
+      writer.merge(
+        result.toUIMessageStream<AssistantUIMessage>({
+          onError: mapStreamError,
+          messageMetadata: ({ part }) => {
+            if (part.type === "start") return { createdAt: Date.now() };
+            if (part.type === "finish") {
+              const usage = part.totalUsage;
+              return {
+                inputTokens: usage.inputTokens,
+                outputTokens: usage.outputTokens,
+                cachedInputTokens: usage.inputTokenDetails.cacheReadTokens,
+              };
+            }
+          },
+        }),
+      );
 
       // `result.text` resolves when generation completes, and (verified
       // against ai@6.0.202: createUIMessageStream pushes this execute promise
