@@ -1,4 +1,5 @@
 import { listDocuments } from "@/lib/documents";
+import { loadActiveThread } from "@/lib/chat-store";
 import { DocsProvider } from "@/components/documents/docs-context";
 import { DocSidebar } from "@/components/documents/doc-sidebar";
 
@@ -16,8 +17,14 @@ export default async function AssistantLayout({
   children: React.ReactNode;
 }) {
   const documents = await listDocuments();
+  // #22: restore the session's doc selection with its thread. Stale ids
+  // (doc deleted since) are dropped here so the provider never selects
+  // documents that no longer exist.
+  const thread = await loadActiveThread();
+  const known = new Set(documents.map((d) => d.id));
+  const initialSelectedIds = thread.selectedDocIds.filter((id) => known.has(id));
   return (
-    <DocsProvider documents={documents}>
+    <DocsProvider documents={documents} initialSelectedIds={initialSelectedIds}>
       <div className="flex min-w-0 flex-1">
         <DocSidebar />
         <div className="flex min-w-0 flex-1 flex-col">{children}</div>

@@ -15,8 +15,16 @@ vi.mock("@/lib/anthropic", async (importOriginal) => {
   return { ...original, languageModelFor: vi.fn() };
 });
 
+// Mock persistence (#22) — assert the route's two writes without a DB.
+vi.mock("@/lib/chat-store", () => ({
+  getActiveSession: vi.fn().mockResolvedValue({ id: "session1" }),
+  replaceThread: vi.fn().mockResolvedValue(undefined),
+  appendMessage: vi.fn().mockResolvedValue(undefined),
+}));
+
 import { prisma } from "@/lib/prisma";
 import { languageModelFor } from "@/lib/anthropic";
+import { appendMessage, replaceThread } from "@/lib/chat-store";
 import { POST } from "./route";
 
 // --- helpers ---------------------------------------------------------------
@@ -262,6 +270,43 @@ describe("POST /api/assistant/chat — streaming", () => {
     expect(systemText.indexOf("===== DOCUMENT")).toBeLessThan(
       systemText.indexOf("Citations and confidence"),
     );
+  });
+
+  it("persists the incoming thread before the call and the finished turn after (#22)", async () => {
+    vi.mocked(prisma.document.findMany).mockResolvedValue([DOC]);
+    const text =
+      "The term is five years." +
+      `${FOOTER_OPEN}{"citations":[{"docId":"doc1","quote":"five (5) years from the"}],"confidence":0.9}${FOOTER_CLOSE}`;
+    scriptModel(text);
+
+    const res = await POST(request(validBody()));
+    await res.text(); // drain the stream so the post-stream append runs
+
+    // Write 1: replace-all of the client's array, with the doc selection.
+    expect(replaceThread).toHaveBeenCalledWith("session1", MESSAGES, ["doc1"]);
+
+    // Write 2: the finished assistant turn — raw text, verified citations
+    // data part, and the same metadata shape the stream carried.
+    expect(appendMessage).toHaveBeenCalledTimes(1);
+    const [sessionId, message, position] = vi.mocked(appendMessage).mock.calls[0];
+    expect(sessionId).toBe("session1");
+    expect(position).toBe(MESSAGES.length);
+    expect(message.role).toBe("assistant");
+    const parts = message.parts as Array<{ type: string; [k: string]: unknown }>;
+    expect(parts[0]).toEqual({ type: "text", text });
+    expect(parts[1].type).toBe("data-citations");
+    expect(message.metadata).toMatchObject({ inputTokens: 10, outputTokens: 20 });
+  });
+
+  it("does not persist an assistant turn when the stream fails (#22)", async () => {
+    vi.mocked(prisma.document.findMany).mockResolvedValue([DOC]);
+    scriptModelReject(new Error("boom"));
+
+    const res = await POST(request(validBody()));
+    await res.text();
+
+    expect(replaceThread).toHaveBeenCalledTimes(1); // the user's turn is safe
+    expect(appendMessage).not.toHaveBeenCalled(); // no half-finished reply
   });
 
   it("maps a context-ceiling doStream rejection to a legible SSE error, not raw internals", async () => {

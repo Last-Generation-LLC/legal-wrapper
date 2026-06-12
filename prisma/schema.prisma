@@ -34,21 +34,35 @@ model Document {
 }
 
 /// A single Assistant conversation. Groups its messages in order.
+/// Exactly one session is ACTIVE (archivedAt = null) at a time (#22):
+/// "New session" archives it rather than deleting — the session-list UI
+/// (#26) will browse the archive.
 model ChatSession {
-  id        String    @id @default(cuid())
-  title     String? // optional friendly name for the conversation
-  createdAt DateTime  @default(now())
-  messages  Message[]
+  id             String    @id @default(cuid())
+  title          String? // optional friendly name for the conversation
+  createdAt      DateTime  @default(now())
+  /// set when "New session" retires this thread; null = the active thread
+  archivedAt     DateTime?
+  /// JSON string[] of Document ids selected when the last turn was sent —
+  /// restored with the thread so the conversation keeps its context.
+  selectedDocIds String    @default("[]")
+  messages       Message[]
 }
 
 /// One turn in a ChatSession. `role` is a plain string ("user" | "assistant"),
 /// matching the AI SDK's role values — SQLite has no native enum type.
+/// `content` holds the FULL AI SDK UIMessage as JSON (parts + metadata +
+/// citation data parts) so a restored thread is byte-faithful (#22); the
+/// row id mirrors the UIMessage id.
 model Message {
   id            String      @id @default(cuid())
   chatSession   ChatSession @relation(fields: [chatSessionId], references: [id], onDelete: Cascade)
   chatSessionId String
   role          String
   content       String
+  /// 0-based order within the session — replace-all writes burst in within
+  /// the same millisecond, so createdAt alone cannot order a thread.
+  position      Int         @default(0)
   createdAt     DateTime    @default(now())
 
   @@index([chatSessionId])

@@ -23,6 +23,18 @@ function Probe() {
   );
 }
 
+describe("DocsProvider seeding (#22)", () => {
+  it("starts with the restored session selection", () => {
+    render(
+      <DocsProvider documents={[doc("a", 100), doc("b", 200), doc("c", 300)]} initialSelectedIds={["a", "c"]}>
+        <Probe />
+      </DocsProvider>,
+    );
+    expect(screen.getByTestId("sel-count").textContent).toBe("2");
+    expect(screen.getByTestId("sel-tokens").textContent).toBe("400");
+  });
+});
+
 describe("DocsProvider", () => {
   it("derives totals over all docs and selection over selected docs", () => {
     render(

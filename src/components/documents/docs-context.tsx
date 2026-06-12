@@ -22,15 +22,21 @@ const DocsContext = createContext<DocsContextValue | null>(null);
 
 export function DocsProvider({
   documents,
+  initialSelectedIds,
   children,
 }: {
   documents: DocumentMeta[];
+  /** Seed selection (#22): the active chat session's restored doc selection. */
+  initialSelectedIds?: string[];
   children: React.ReactNode;
 }) {
-  // Selection is in-memory only (d6): it resets on reload and is intentionally
-  // NOT persisted. `documents` comes from the server via props, so a post-upload
-  // router.refresh() updates the list while this selection survives.
-  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  // Selection lives in client state; the SEED comes from the persisted chat
+  // session (#22 — restored with the thread, since a conversation about
+  // documents is half-meaningless without them). Later toggles are persisted
+  // by the chat route whenever a turn is sent. `documents` comes from the
+  // server via props, so a post-upload router.refresh() updates the list
+  // while this selection survives.
+  const [selectedIds, setSelectedIds] = useState<string[]>(initialSelectedIds ?? []);
 
   const value = useMemo<DocsContextValue>(() => {
     const toggle = (id: string) =>

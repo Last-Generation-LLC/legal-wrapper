@@ -27,7 +27,14 @@ import { PromptPanel } from "./prompt-panel";
 //
 // The chat history is IN-MEMORY by decision: it resets on reload.
 // Persistence to ChatSession/Message is a captured follow-up task (#22).
-export function AssistantChat({ modelLabel }: { modelLabel: string }) {
+export function AssistantChat({
+  modelLabel,
+  initialMessages,
+}: {
+  modelLabel: string;
+  /** The persisted active thread (#22) — seeded into useChat on mount. */
+  initialMessages?: AssistantUIMessage[];
+}) {
   const { documents, selectedIds, selectedCount, selectedTokens, toggle } = useDocs();
 
   const [draft, setDraft] = useState("");
@@ -44,6 +51,10 @@ export function AssistantChat({ modelLabel }: { modelLabel: string }) {
   const { messages, status, error, sendMessage, regenerate, setMessages, clearError, stop } =
     useChat<AssistantUIMessage>({
       transport: new DefaultChatTransport({ api: "/api/assistant/chat" }),
+      // The persisted thread (#22). useChat reads this once on mount —
+      // verified against AI SDK v6 docs: `messages` is the seeding option
+      // (renamed from v4's initialMessages).
+      messages: initialMessages,
     });
   const busy = status === "submitted" || status === "streaming";
 
@@ -94,6 +105,17 @@ export function AssistantChat({ modelLabel }: { modelLabel: string }) {
     // active response's chunks re-push the streaming assistant message into
     // the just-cleared thread — and the Opus call keeps running.
     await stop();
+    // #22: archive the persisted thread server-side (never deleted — the
+    // session-list UI, #26, will browse the archive) before clearing the
+    // client. If the call fails, keep the thread: clearing the screen while
+    // the server still considers the old session active would make the next
+    // send silently resurrect it.
+    try {
+      const res = await fetch("/api/assistant/session", { method: "POST" });
+      if (!res.ok) return;
+    } catch {
+      return;
+    }
     setMessages([]);
     clearError();
     setDraft("");

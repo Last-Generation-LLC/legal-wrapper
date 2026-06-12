@@ -10,8 +10,10 @@ import {
   type ModelMessage,
   type UIMessage,
 } from "ai";
+import { generateId } from "ai";
 import { prisma } from "@/lib/prisma";
 import { languageModelFor } from "@/lib/anthropic";
+import { appendMessage, getActiveSession, replaceThread } from "@/lib/chat-store";
 import { CONTEXT_CEILING, overCeilingMessage } from "@/lib/context-ceiling";
 import { composeAssistantSystemPrompt } from "@/lib/wrapper";
 import { parseAssistantFooter } from "@/lib/contract";
@@ -104,6 +106,14 @@ export async function POST(request: Request) {
   );
   const docTextById = new Map(ordered.map((d) => [d.id, d.extractedText]));
 
+  // PERSISTENCE, write 1 of 2 (#22): sync the active session to the client's
+  // array before the model call. The client array is the truth — this single
+  // replace-all inherits edit/truncate/regenerate semantics. If the stream
+  // later fails, the user's turn is already safe; only the never-finished
+  // assistant text is lost on a mid-stream reload.
+  const session = await getActiveSession();
+  await replaceThread(session.id, messages as AssistantUIMessage[], docIds);
+
   // Conversion can throw even after validateUIMessages passes — a history
   // part the model API can't accept is a client-content problem, so keep the
   // structured-400 contract rather than leaking an opaque 500. Any other
@@ -192,16 +202,42 @@ export async function POST(request: Request) {
       // the source documents. A missing or malformed footer degrades to
       // prose-only (locked decision) — we simply don't write the data part.
       const { value, footer } = parseAssistantFooter(text);
-      if (!footer) return;
-      // Attach the FULL VerifiedAnswer (locked decision): `value` is the
-      // footer-stripped prose, `citations` carry verified flags + derived
-      // pages, `confidence` is possibly downgraded. #10 reads this part
-      // from message.parts and can render the clean prose from `value`
-      // without re-parsing.
-      writer.write({
-        type: "data-citations",
-        data: verifyAnswer({ value, ...footer }, docTextById),
-      });
+      const verified = footer
+        ? verifyAnswer({ value, ...footer }, docTextById)
+        : null;
+      if (verified) {
+        // Attach the FULL VerifiedAnswer (locked decision): `value` is the
+        // footer-stripped prose, `citations` carry verified flags + derived
+        // pages, `confidence` is possibly downgraded. #10 reads this part
+        // from message.parts and can render the clean prose from `value`
+        // without re-parsing.
+        writer.write({ type: "data-citations", data: verified });
+      }
+
+      // PERSISTENCE, write 2 of 2 (#22): the finished assistant turn. Built
+      // from the same pieces the stream carried — raw text (displayText
+      // strips the footer on render), the verified data part, and the same
+      // metadata shape messageMetadata emits. The id differs from the
+      // client's in-memory id; the next turn's replace-all self-heals that.
+      const usage = await result.totalUsage;
+      await appendMessage(
+        session.id,
+        {
+          id: generateId(),
+          role: "assistant",
+          parts: [
+            { type: "text", text },
+            ...(verified ? [{ type: "data-citations" as const, data: verified }] : []),
+          ],
+          metadata: {
+            createdAt: Date.now(),
+            inputTokens: usage.inputTokens,
+            outputTokens: usage.outputTokens,
+            cachedInputTokens: usage.inputTokenDetails.cacheReadTokens,
+          },
+        },
+        messages.length,
+      );
     },
     onError: mapStreamError,
   });
