@@ -35,6 +35,14 @@ describe("DocSidebar", () => {
     expect(screen.getByText(/No documents yet/i)).toBeInTheDocument();
   });
 
+  it("warns near the ceiling and flags red past it (#16)", () => {
+    renderSidebar([doc("big", 150_000), doc("bigger", 50_000)]);
+    fireEvent.click(screen.getByText("big.pdf"));
+    expect(screen.getByText(/150\.0k \/ 180k · near ceiling/)).toBeInTheDocument();
+    fireEvent.click(screen.getByText("bigger.pdf"));
+    expect(screen.getByText(/200\.0k \/ 180k · over ceiling/)).toBeInTheDocument();
+  });
+
   it("lists documents and updates the in-context count when a row is toggled", () => {
     renderSidebar([doc("a", 1000), doc("b", 2000)]);
     expect(screen.getByText("2 documents · 3,000 tokens")).toBeInTheDocument();

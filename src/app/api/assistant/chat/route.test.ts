@@ -133,6 +133,17 @@ describe("POST /api/assistant/chat — rejections", () => {
     expect(res.status).toBe(404);
     expect((await res.json()).error).toContain("nope");
   });
+
+  it("413 BEFORE the model call when the combined selection is over the ceiling (#16)", async () => {
+    vi.mocked(prisma.document.findMany).mockResolvedValue([
+      { ...DOC, id: "a", tokenCount: 100_000 },
+      { ...DOC, id: "b", tokenCount: 90_000 },
+    ]);
+    const res = await POST(request(validBody({ docIds: ["a", "b"] })));
+    expect(res.status).toBe(413);
+    expect((await res.json()).error).toMatch(/190\.0k.*180\.0k/);
+    expect(languageModelFor).not.toHaveBeenCalled(); // blocked while a clean status is still possible
+  });
 });
 
 describe("POST /api/assistant/chat — streaming", () => {

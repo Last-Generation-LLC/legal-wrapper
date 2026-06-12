@@ -8,6 +8,7 @@ import { Btn } from "@/components/ui/btn";
 import { Pill } from "@/components/ui/pill";
 import { useDocs } from "@/components/documents/docs-context";
 import { useUpload } from "@/components/documents/use-upload";
+import { ceilingState, overCeilingMessage } from "@/lib/context-ceiling";
 import { DEFAULT_SYSTEM_PROMPT } from "@/lib/wrapper";
 import {
   displayText,
@@ -25,7 +26,7 @@ import { Composer } from "./composer";
 // The chat history is IN-MEMORY by decision: it resets on reload.
 // Persistence to ChatSession/Message is a captured follow-up task (#22).
 export function AssistantChat({ modelLabel }: { modelLabel: string }) {
-  const { documents, selectedIds, selectedCount, toggle } = useDocs();
+  const { documents, selectedIds, selectedCount, selectedTokens, toggle } = useDocs();
 
   const [draft, setDraft] = useState("");
   // When set, the draft edits this user message: sending replaces it and
@@ -54,9 +55,14 @@ export function AssistantChat({ modelLabel }: { modelLabel: string }) {
     systemPromptTemplate: DEFAULT_SYSTEM_PROMPT,
   });
 
+  // #16 guardrail: past the ceiling the call is BLOCKED client-side with a
+  // clear message (the route 413s as backstop) — never a silent bad call.
+  const blocked =
+    ceilingState(selectedTokens) === "over" ? overCeilingMessage(selectedTokens) : null;
+
   function handleSend() {
     const text = draft.trim();
-    if (!text || busy) return;
+    if (!text || busy || blocked) return;
     void sendMessage(
       {
         text,
@@ -126,6 +132,7 @@ export function AssistantChat({ modelLabel }: { modelLabel: string }) {
           setDraft("");
         }}
         busy={busy}
+        blocked={blocked}
         uploading={uploading}
         uploadError={uploadError}
         docCount={selectedCount}

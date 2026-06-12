@@ -2,10 +2,10 @@
 
 import { createContext, useContext, useMemo, useState } from "react";
 import type { DocumentMeta } from "@/lib/documents";
-
-// No-RAG context budget: the whole selected doc set is sent on every call, so
-// ~180k tokens is the practical ceiling. Ceiling *enforcement* (warn/block) is #16.
-const CONTEXT_CEILING = 180_000;
+// No-RAG context budget: the whole selected doc set is sent on every call.
+// The shared constant (and the warn/block enforcement, #16) live in
+// context-ceiling.ts so the UI and the API routes can never disagree.
+import { CONTEXT_CEILING } from "@/lib/context-ceiling";
 
 type DocsContextValue = {
   documents: DocumentMeta[];

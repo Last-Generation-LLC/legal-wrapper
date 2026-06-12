@@ -2,6 +2,7 @@ import { z } from "zod";
 import Anthropic from "@anthropic-ai/sdk";
 import { prisma } from "@/lib/prisma";
 import { getAnthropic, modelFor } from "@/lib/anthropic";
+import { CONTEXT_CEILING, docOverCeilingMessage } from "@/lib/context-ceiling";
 import { composeReviewSystemPrompt } from "@/lib/wrapper";
 import {
   buildReviewTool,
@@ -50,6 +51,14 @@ export async function POST(request: Request) {
 
   const doc = await prisma.document.findUnique({ where: { id: docId } });
   if (!doc) return error(`Unknown document id: ${docId}.`, 404);
+
+  // #16 guardrail: an oversized document fails fast and cheap — one HTTP
+  // round-trip, no model call (and via the #13 warm-skip, the doc's other
+  // cells aren't attempted either). Stored tokenCount is approximate; the
+  // reactive 413 mapping below remains the authoritative backstop.
+  if (doc.tokenCount > CONTEXT_CEILING) {
+    return error(docOverCeilingMessage(doc.tokenCount), 413);
+  }
 
   // CACHE PREFIX (the load-bearing cost lever): tools render first and are
   // deterministic; the system block (template + full doc text + strategy) is

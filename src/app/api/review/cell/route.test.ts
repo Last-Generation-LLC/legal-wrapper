@@ -117,6 +117,17 @@ describe("POST /api/review/cell — rejections", () => {
     expect(res.status).toBe(404);
     expect((await res.json()).error).toContain("ghost");
   });
+
+  it("413 BEFORE the model call when the document is over the ceiling (#16)", async () => {
+    vi.mocked(prisma.document.findUnique).mockResolvedValue({
+      ...DOC,
+      tokenCount: 200_000,
+    });
+    const res = await POST(request(validBody()));
+    expect(res.status).toBe(413);
+    expect((await res.json()).error).toMatch(/200\.0k.*180\.0k/);
+    expect(getAnthropic).not.toHaveBeenCalled(); // fast + free — no API spend
+  });
 });
 
 describe("POST /api/review/cell — the call", () => {

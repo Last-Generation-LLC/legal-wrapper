@@ -2,9 +2,24 @@
 
 import { useRef } from "react";
 import { Btn } from "@/components/ui/btn";
+import { ceilingState, type CeilingState } from "@/lib/context-ceiling";
 import { useDocs } from "./docs-context";
 import { useUpload } from "./use-upload";
 import { DocRow } from "./doc-row";
+
+// #16 guardrail colors: the meter keeps the handoff's amber accent through
+// the warn band and turns red past the ceiling; the count text follows so
+// the state is legible without the meter.
+const METER_BG: Record<CeilingState, string> = {
+  ok: "bg-amber",
+  warn: "bg-amber",
+  over: "bg-red",
+};
+const COUNT_TEXT: Record<CeilingState, string> = {
+  ok: "text-dim",
+  warn: "text-amber",
+  over: "text-red",
+};
 
 export function DocSidebar() {
   const {
@@ -14,8 +29,9 @@ export function DocSidebar() {
   const inputRef = useRef<HTMLInputElement>(null);
   const { upload, uploading, error } = useUpload();
 
-  // d5: fill fraction, clamped at 100%. No warn/block here — that's #16.
+  // Fill fraction, clamped at 100%; color carries the over-100% signal.
   const meterPct = Math.min(100, (selectedTokens / ceiling) * 100);
+  const state = ceilingState(selectedTokens);
 
   function onFile(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -60,8 +76,10 @@ export function DocSidebar() {
         <span className="font-mono text-[10.5px] uppercase tracking-[0.08em] text-muted-foreground">
           In Context · {selectedCount}
         </span>
-        <span className="font-mono text-[10.5px] text-dim">
+        <span className={`font-mono text-[10.5px] ${COUNT_TEXT[state]}`}>
           {(selectedTokens / 1000).toFixed(1)}k / {(ceiling / 1000).toFixed(0)}k
+          {state === "warn" && " · near ceiling"}
+          {state === "over" && " · over ceiling"}
         </span>
       </div>
       <div className="px-3.5 pb-2.5">
@@ -73,7 +91,7 @@ export function DocSidebar() {
           aria-label="Tokens in context"
           className="h-[3px] overflow-hidden rounded-[2px] bg-panel-hi"
         >
-          <div className="h-full bg-amber" style={{ width: `${meterPct}%` }} />
+          <div className={`h-full ${METER_BG[state]}`} style={{ width: `${meterPct}%` }} />
         </div>
       </div>
 

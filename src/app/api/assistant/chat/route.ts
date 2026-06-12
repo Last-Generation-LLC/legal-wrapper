@@ -12,6 +12,7 @@ import {
 } from "ai";
 import { prisma } from "@/lib/prisma";
 import { languageModelFor } from "@/lib/anthropic";
+import { CONTEXT_CEILING, overCeilingMessage } from "@/lib/context-ceiling";
 import { composeAssistantSystemPrompt } from "@/lib/wrapper";
 import { parseAssistantFooter } from "@/lib/contract";
 import { verifyAnswer } from "@/lib/citation";
@@ -83,6 +84,16 @@ export async function POST(request: Request) {
   }
   const byId = new Map(docs.map((d) => [d.id, d]));
   const ordered = docIds.map((id) => byId.get(id)!);
+
+  // #16 guardrail (defense in depth behind the client block): refuse
+  // over-ceiling selections BEFORE the model call, while a clean HTTP status
+  // is still possible — once streaming starts the response is already 200.
+  // Stored tokenCounts make this approximate; the reactive mapStreamError
+  // mapping below stays as the authoritative backstop.
+  const selectedTokens = ordered.reduce((sum, d) => sum + d.tokenCount, 0);
+  if (selectedTokens > CONTEXT_CEILING) {
+    return error(overCeilingMessage(selectedTokens), 413);
+  }
 
   // The COMPLETE prompt: user-editable template (docs filled) + citation
   // strategy, fixed order, nothing else. What the user sees in the prompt

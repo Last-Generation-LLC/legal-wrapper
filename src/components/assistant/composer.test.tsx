@@ -11,6 +11,7 @@ function renderComposer(props: Partial<React.ComponentProps<typeof Composer>> = 
     onAttach: () => {},
     onCancelEdit: () => {},
     busy: false,
+    blocked: null,
     uploading: false,
     uploadError: null,
     docCount: 2,
@@ -32,6 +33,19 @@ describe("Composer", () => {
     fireEvent.keyDown(textarea, { key: "Enter", metaKey: true });
     fireEvent.keyDown(textarea, { key: "Enter", ctrlKey: true });
     expect(onSend).toHaveBeenCalledTimes(2);
+  });
+
+  it("blocks sending past the ceiling and shows the reason (#16)", () => {
+    const onSend = vi.fn();
+    renderComposer({
+      value: "a real question",
+      onSend,
+      blocked: "Selected documents total ~212.4k tokens — over the 180.0k context ceiling.",
+    });
+    expect(screen.getByRole("alert").textContent).toMatch(/over the 180\.0k/);
+    expect(screen.getByRole("button", { name: /Send/ })).toBeDisabled();
+    fireEvent.keyDown(screen.getByPlaceholderText(/ask about/i), { key: "Enter", metaKey: true });
+    expect(onSend).not.toHaveBeenCalled();
   });
 
   it("does not send a blank message", () => {
