@@ -352,6 +352,7 @@ describe("regenerateCell", () => {
       runCell: async () => ({ answer, usage }),
       onUpdate: (docId, colId, result) => updates.push([docId, colId, result]),
     });
+    expect(updates).toHaveLength(2); // exactly running → done, no spurious updates
     expect(updates[0]).toEqual(["d1", "c1", { status: "running" }]);
     expect(updates[1]).toEqual([
       "d1",
@@ -370,6 +371,7 @@ describe("regenerateCell", () => {
       },
       onUpdate: (docId, colId, result) => updates.push([docId, colId, result]),
     });
+    expect(updates).toHaveLength(2); // exactly running → error, no spurious updates
     expect(updates[0]).toEqual(["d1", "c1", { status: "running" }]);
     expect(updates[1]).toEqual([
       "d1",
