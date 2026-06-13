@@ -74,10 +74,11 @@ export function ChatMessage({
         {/* Metadata line: timestamp · token accounting · confidence */}
         <div className="mb-1.5 flex items-baseline gap-2.5 font-mono text-[10.5px] text-dim">
           {meta?.createdAt != null && <span>{formatClock(meta.createdAt)}</span>}
-          {meta?.inputTokens != null && meta?.outputTokens != null && (
+          {meta?.usage && (
             <span>
-              in {meta.inputTokens.toLocaleString()} · out {meta.outputTokens.toLocaleString()} · cached{" "}
-              {(meta.cachedInputTokens ?? 0).toLocaleString()}
+              in {meta.usage.uncachedInputTokens.toLocaleString()} · out{" "}
+              {meta.usage.outputTokens.toLocaleString()} · cached{" "}
+              {meta.usage.cacheReadInputTokens.toLocaleString()}
             </span>
           )}
           {answer && (

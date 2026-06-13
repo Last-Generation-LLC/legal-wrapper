@@ -6,18 +6,41 @@
 // that wire shape — components render what these helpers return and never
 // touch the footer protocol directly.
 
-import type { UIMessage } from "ai";
+import type { LanguageModelUsage, ProviderMetadata, UIMessage } from "ai";
 import { parseAssistantFooter, type VerifiedAnswer } from "@/lib/contract";
+import type { TokenUsage } from "@/lib/pricing";
 
-/** Message-level metadata: timestamps always, token usage once the call finishes. */
+/** Message-level metadata: timestamp always, canonical usage once the call finishes. */
 export type AssistantMetadata = {
   /** Epoch ms — set by the client for user messages, by the route for assistant ones. */
   createdAt?: number;
-  inputTokens?: number;
-  outputTokens?: number;
-  /** Prompt tokens served from Anthropic's cache (0 until caching lands in #17). */
-  cachedInputTokens?: number;
+  /** Real token usage of the finished assistant turn (#17). */
+  usage?: TokenUsage;
 };
+
+/**
+ * Map the AI SDK's usage (where `inputTokens` is the TOTAL including cache) plus
+ * Anthropic's `cacheCreationInputTokens` (only in providerMetadata) into the
+ * canonical TokenUsage. Cache-read is `cachedInputTokens`; cache-write comes from
+ * providerMetadata; uncached is the remainder (floored at 0 for safety).
+ */
+export function normalizeAssistantUsage(
+  usage: LanguageModelUsage,
+  providerMetadata?: ProviderMetadata,
+): TokenUsage {
+  const total = usage.inputTokens ?? 0;
+  const cacheRead = usage.cachedInputTokens ?? 0;
+  // providerMetadata.anthropic is loosely typed (Record<string, unknown>); narrow
+  // to the one field we read, then Number(...) coerces away any null/string.
+  const anthropic = providerMetadata?.anthropic as { cacheCreationInputTokens?: number } | undefined;
+  const cacheWrite = Number(anthropic?.cacheCreationInputTokens ?? 0);
+  return {
+    uncachedInputTokens: Math.max(0, total - cacheRead - cacheWrite),
+    cacheReadInputTokens: cacheRead,
+    cacheWriteInputTokens: cacheWrite,
+    outputTokens: usage.outputTokens ?? 0,
+  };
+}
 
 /** Custom data parts: the route's `data-citations` part is the whole VerifiedAnswer. */
 export type AssistantDataParts = { citations: VerifiedAnswer };

@@ -35,7 +35,7 @@ function assistantMessage(overrides: Partial<AssistantUIMessage> = {}): Assistan
       { type: "text", text: `The cap is 2x fees.\n${FOOTER_OPEN}{}${FOOTER_CLOSE}` },
       { type: "data-citations", data: ANSWER },
     ],
-    metadata: { createdAt: new Date(2026, 5, 12, 10, 42).getTime(), inputTokens: 54120, outputTokens: 412, cachedInputTokens: 45800 },
+    metadata: { createdAt: new Date(2026, 5, 12, 10, 42).getTime(), usage: { uncachedInputTokens: 54120, outputTokens: 412, cacheReadInputTokens: 45800, cacheWriteInputTokens: 0 } },
     ...overrides,
   };
 }

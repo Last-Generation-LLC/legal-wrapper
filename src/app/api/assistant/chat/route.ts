@@ -18,7 +18,7 @@ import { CONTEXT_CEILING, overCeilingMessage } from "@/lib/context-ceiling";
 import { composeAssistantSystemPrompt } from "@/lib/wrapper";
 import { parseAssistantFooter } from "@/lib/contract";
 import { verifyAnswer } from "@/lib/citation";
-import type { AssistantUIMessage } from "@/lib/chat-ui";
+import { normalizeAssistantUsage, type AssistantUIMessage } from "@/lib/chat-ui";
 
 // The Anthropic call and Prisma are Node-only — never the Edge runtime.
 export const runtime = "nodejs";
@@ -146,8 +146,23 @@ export async function POST(request: Request) {
     execute: async ({ writer }) => {
       const result = streamText({
         model: languageModelFor("assistant"),
-        system,
-        messages: modelMessages,
+        // The system prompt rides the messages array (not the `system` param) so
+        // it can carry a cache breakpoint; this flag is the SDK's "yes, I meant
+        // to do that" — it suppresses the per-request advisory warning.
+        allowSystemInMessages: true,
+        messages: [
+          {
+            role: "system",
+            content: system,
+            // One cache breakpoint on the document-bearing system prompt: turn 2+
+            // of a conversation with the same docs/template pays ~10% on these
+            // input tokens (5-min ephemeral TTL). Byte-identical across turns, so
+            // it's a clean cache prefix. <1024 tokens (e.g. no docs) simply won't
+            // cache — no error, cacheWrite stays 0.
+            providerOptions: { anthropic: { cacheControl: { type: "ephemeral" } } },
+          },
+          ...modelMessages,
+        ],
         maxOutputTokens: MAX_OUTPUT_TOKENS,
         // Single-shot by construction: no tools, no stopWhen/steps.
       });
@@ -167,13 +182,10 @@ export async function POST(request: Request) {
           onError: mapStreamError,
           messageMetadata: ({ part }) => {
             if (part.type === "start") return { createdAt: Date.now() };
-            if (part.type === "finish") {
-              const usage = part.totalUsage;
-              return {
-                inputTokens: usage.inputTokens,
-                outputTokens: usage.outputTokens,
-                cachedInputTokens: usage.inputTokenDetails.cacheReadTokens,
-              };
+            // finish-step carries usage AND providerMetadata (cache-write count).
+            // Single-shot → exactly one finish-step.
+            if (part.type === "finish-step") {
+              return { usage: normalizeAssistantUsage(part.usage, part.providerMetadata) };
             }
           },
         }),
@@ -226,6 +238,7 @@ export async function POST(request: Request) {
       // the missing row.
       try {
         const usage = await result.totalUsage;
+        const providerMetadata = await result.providerMetadata;
         await appendMessage(
           session.id,
           {
@@ -237,9 +250,7 @@ export async function POST(request: Request) {
             ],
             metadata: {
               createdAt: Date.now(),
-              inputTokens: usage.inputTokens,
-              outputTokens: usage.outputTokens,
-              cachedInputTokens: usage.inputTokenDetails.cacheReadTokens,
+              usage: normalizeAssistantUsage(usage, providerMetadata),
             },
           },
           messages.length,

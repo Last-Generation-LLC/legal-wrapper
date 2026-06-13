@@ -78,7 +78,14 @@ function scriptModelReject(err: Error) {
   );
 }
 
-/** Script the mocked model to stream the given text in two deltas. */
+/** Script the mocked model to stream the given text in two deltas.
+ *  The finish chunk includes providerMetadata with cacheCreationInputTokens
+ *  and a cacheRead token count so the route's normalizeAssistantUsage can
+ *  produce a canonical TokenUsage shape.
+ *
+ *  Simulated usage: total input = 10 (4 uncached + 3 cacheRead + 3 cacheWrite),
+ *  outputTokens = 20. So canonical: uncached=4, cacheRead=3, cacheWrite=3, out=20.
+ */
 function scriptModel(fullText: string) {
   const mid = Math.floor(fullText.length / 2);
   vi.mocked(languageModelFor).mockReturnValue(
@@ -96,12 +103,13 @@ function scriptModel(fullText: string) {
               usage: {
                 inputTokens: {
                   total: 10,
-                  noCache: 10,
-                  cacheRead: undefined,
-                  cacheWrite: undefined,
+                  noCache: 4,
+                  cacheRead: 3,
+                  cacheWrite: 3,
                 },
                 outputTokens: { total: 20, text: 20, reasoning: undefined },
               },
+              providerMetadata: { anthropic: { cacheCreationInputTokens: 3 } },
             },
           ],
         }),
@@ -189,19 +197,22 @@ describe("POST /api/assistant/chat — streaming", () => {
     expect(sse).toContain('"confidence":0.9');
   });
 
-  it("attaches a timestamp and token usage as message metadata", async () => {
+  it("attaches a timestamp and canonical token usage as message metadata", async () => {
     vi.mocked(prisma.document.findMany).mockResolvedValue([DOC]);
     scriptModel("The term is five years.");
 
     const res = await POST(request(validBody()));
     const sse = await res.text();
 
-    // start event → createdAt; finish event → usage from the model's
-    // finish chunk (scriptModel: input 10 / output 20). #10's thread renders
-    // these as the per-message "in · out · cached" metadata line.
+    // start event → createdAt; finish-step event → canonical usage derived from
+    // the model's finish chunk (scriptModel: total=10, cacheRead=3, cacheWrite=3
+    // → uncached=4, cacheRead=3, cacheWrite=3, out=20).
     expect(sse).toContain('"createdAt"');
-    expect(sse).toContain('"inputTokens":10');
+    expect(sse).toContain('"usage"');
+    expect(sse).toContain('"uncachedInputTokens":4');
     expect(sse).toContain('"outputTokens":20');
+    expect(sse).toContain('"cacheReadInputTokens":3');
+    expect(sse).toContain('"cacheWriteInputTokens":3');
   });
 
   it("degrades to prose-only when the footer is absent (no data part, no error)", async () => {
@@ -295,7 +306,16 @@ describe("POST /api/assistant/chat — streaming", () => {
     const parts = message.parts as Array<{ type: string; [k: string]: unknown }>;
     expect(parts[0]).toEqual({ type: "text", text });
     expect(parts[1].type).toBe("data-citations");
-    expect(message.metadata).toMatchObject({ inputTokens: 10, outputTokens: 20 });
+    // Canonical usage shape derived from the mock finish chunk (total=10, cacheRead=3,
+    // cacheWrite=3 → uncached=4, cacheRead=3, cacheWrite=3, out=20).
+    expect(message.metadata).toMatchObject({
+      usage: {
+        uncachedInputTokens: 4,
+        cacheReadInputTokens: 3,
+        cacheWriteInputTokens: 3,
+        outputTokens: 20,
+      },
+    });
   });
 
   it("does not persist an assistant turn when the stream fails (#22)", async () => {

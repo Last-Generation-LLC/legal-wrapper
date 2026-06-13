@@ -6,6 +6,7 @@ import {
   verifiedAnswerOf,
   formatClock,
   estimateTokens,
+  normalizeAssistantUsage,
   originatingUserMessage,
   resolveEditTarget,
   modelDisplayLabel,
@@ -181,5 +182,35 @@ describe("estimateTokens", () => {
 
   it("is 0 for empty text", () => {
     expect(estimateTokens("")).toBe(0);
+  });
+});
+
+describe("normalizeAssistantUsage", () => {
+  it("splits the AI SDK total into uncached/read/write using providerMetadata", () => {
+    // AI SDK: inputTokens is TOTAL (incl cache); cachedInputTokens is the read subset.
+    const usage = { inputTokens: 1000, outputTokens: 200, cachedInputTokens: 600, totalTokens: 1200, inputTokenDetails: { noCacheTokens: undefined, cacheReadTokens: 600, cacheWriteTokens: undefined }, outputTokenDetails: { textTokens: 200, reasoningTokens: undefined } };
+    const pm = { anthropic: { cacheCreationInputTokens: 100 } };
+    expect(normalizeAssistantUsage(usage, pm)).toEqual({
+      uncachedInputTokens: 300, // 1000 - 600 read - 100 write
+      cacheReadInputTokens: 600,
+      cacheWriteInputTokens: 100,
+      outputTokens: 200,
+    });
+  });
+
+  it("treats missing cache fields as zero (no caching yet)", () => {
+    const usage = { inputTokens: 500, outputTokens: 50, totalTokens: 550, inputTokenDetails: { noCacheTokens: 500, cacheReadTokens: undefined, cacheWriteTokens: undefined }, outputTokenDetails: { textTokens: 50, reasoningTokens: undefined } };
+    expect(normalizeAssistantUsage(usage, undefined)).toEqual({
+      uncachedInputTokens: 500,
+      cacheReadInputTokens: 0,
+      cacheWriteInputTokens: 0,
+      outputTokens: 50,
+    });
+  });
+
+  it("never returns a negative uncached count", () => {
+    const usage = { inputTokens: 100, outputTokens: 0, cachedInputTokens: 90, totalTokens: 100, inputTokenDetails: { noCacheTokens: undefined, cacheReadTokens: 90, cacheWriteTokens: undefined }, outputTokenDetails: { textTokens: 0, reasoningTokens: undefined } };
+    const pm = { anthropic: { cacheCreationInputTokens: 50 } }; // 90+50 > 100
+    expect(normalizeAssistantUsage(usage, pm).uncachedInputTokens).toBe(0);
   });
 });

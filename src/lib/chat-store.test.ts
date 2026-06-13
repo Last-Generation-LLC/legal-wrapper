@@ -130,7 +130,7 @@ describe("replaceThread", () => {
   it("stores the full UIMessage JSON so parts and metadata round-trip", async () => {
     const message: AssistantUIMessage = {
       ...uiMessage("a", "assistant", "Delaware"),
-      metadata: { createdAt: 123, inputTokens: 10, outputTokens: 2 },
+      metadata: { createdAt: 123, usage: { uncachedInputTokens: 10, cacheReadInputTokens: 0, cacheWriteInputTokens: 0, outputTokens: 2 } },
     };
     await replaceThread("s1", [message], []);
     const created = vi.mocked(prisma.message.createMany).mock.calls[0][0] as {
