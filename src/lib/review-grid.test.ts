@@ -9,6 +9,7 @@ import {
   loadColumns,
   needsRun,
   newColumn,
+  regenerateCell,
   runGrid,
   saveColumns,
   Semaphore,
@@ -330,5 +331,50 @@ describe("runGrid", () => {
       },
     });
     expect(doneCols.sort()).toEqual(["d2:c1", "d2:c2", "d2:c3"]);
+  });
+});
+
+describe("regenerateCell", () => {
+  const col = { id: "c1", title: "Governing law", prompt: "What law?", width: 160 };
+  const answer = { value: "Delaware", citations: [], confidence: 0.9 };
+  const usage = {
+    inputTokens: 100,
+    outputTokens: 10,
+    cacheReadInputTokens: 0,
+    cacheCreationInputTokens: 0,
+  };
+
+  it("transitions running → done on success, stamping promptUsed", async () => {
+    const updates: Array<[string, string, unknown]> = [];
+    await regenerateCell({
+      docId: "d1",
+      col,
+      runCell: async () => ({ answer, usage }),
+      onUpdate: (docId, colId, result) => updates.push([docId, colId, result]),
+    });
+    expect(updates[0]).toEqual(["d1", "c1", { status: "running" }]);
+    expect(updates[1]).toEqual([
+      "d1",
+      "c1",
+      { status: "done", answer, usage, promptUsed: "What law?" },
+    ]);
+  });
+
+  it("transitions running → error when the call throws", async () => {
+    const updates: Array<[string, string, unknown]> = [];
+    await regenerateCell({
+      docId: "d1",
+      col,
+      runCell: async () => {
+        throw new Error("Rate limited by the model API — retry shortly.");
+      },
+      onUpdate: (docId, colId, result) => updates.push([docId, colId, result]),
+    });
+    expect(updates[0]).toEqual(["d1", "c1", { status: "running" }]);
+    expect(updates[1]).toEqual([
+      "d1",
+      "c1",
+      { status: "error", message: "Rate limited by the model API — retry shortly." },
+    ]);
   });
 });

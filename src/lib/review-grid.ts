@@ -272,3 +272,28 @@ export async function runGrid(options: {
     }),
   );
 }
+
+/**
+ * Re-run a SINGLE cell (the inspector's Regenerate). Unlike runGrid this does
+ * no cache-warming and uses no semaphore — there is no fan-out to protect, just
+ * one call. If the document's 5-minute cache entry from an earlier run is still
+ * warm, this is a cheap cache read; otherwise it pays full input price. State
+ * flows out through the same `onUpdate` the grid uses, so the cell updates in
+ * place. `runCell` is injected so tests never touch the network.
+ */
+export async function regenerateCell(options: {
+  docId: string;
+  col: ReviewColumn;
+  runCell: RunCellFn;
+  onUpdate: (docId: string, colId: string, result: CellResult) => void;
+}): Promise<void> {
+  const { docId, col, runCell, onUpdate } = options;
+  onUpdate(docId, col.id, { status: "running" });
+  try {
+    const { answer, usage } = await runCell(docId, col.prompt);
+    onUpdate(docId, col.id, { status: "done", answer, usage, promptUsed: col.prompt });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    onUpdate(docId, col.id, { status: "error", message });
+  }
+}
