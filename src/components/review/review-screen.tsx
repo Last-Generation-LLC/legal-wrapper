@@ -13,13 +13,16 @@ import {
   gridCounts,
   loadColumns,
   newColumn,
+  regenerateCell,
   runGrid,
   saveColumns,
   STARTER_COLUMNS,
   type CellMap,
+  type CellResult,
   type ReviewColumn,
 } from "@/lib/review-grid";
 import { csvFilename, downloadCsv, gridToCsv } from "@/lib/review-csv";
+import { CellInspector } from "./cell-inspector";
 import { ColumnHeader } from "./column-header";
 import { GridCell } from "./grid-cell";
 import { StatusBar } from "./status-bar";
@@ -42,6 +45,7 @@ export function ReviewScreen({ modelLabel }: { modelLabel: string }) {
   const [cells, setCells] = useState<CellMap>({});
   const [running, setRunning] = useState(false);
   const [editingColId, setEditingColId] = useState<string | null>(null);
+  const [selected, setSelected] = useState<{ docId: string; colId: string } | null>(null);
 
   useEffect(() => {
     setColumns(loadColumns(window.localStorage));
@@ -51,6 +55,20 @@ export function ReviewScreen({ modelLabel }: { modelLabel: string }) {
   useEffect(() => {
     if (columnsLoaded) saveColumns(window.localStorage, columns);
   }, [columns, columnsLoaded]);
+
+  // Derive whether the selection is still valid at render time so we avoid
+  // a useEffect that calls setState (which the lint rule disallows). If the
+  // selected column or doc no longer exists, treat it as null for this render.
+  const effectiveSelected =
+    selected &&
+    docIds.includes(selected.docId) &&
+    columns.some((c) => c.id === selected.colId)
+      ? selected
+      : null;
+
+  function setCell(docId: string, colId: string, result: CellResult) {
+    setCells((prev) => ({ ...prev, [cellKey(docId, colId)]: result }));
+  }
 
   async function handleRunAll() {
     if (running) return;
@@ -66,12 +84,18 @@ export function ReviewScreen({ modelLabel }: { modelLabel: string }) {
         columns,
         cells,
         runCell: fetchCell,
-        onUpdate: (docId, colId, result) =>
-          setCells((prev) => ({ ...prev, [cellKey(docId, colId)]: result })),
+        onUpdate: setCell,
       });
     } finally {
       setRunning(false);
     }
+  }
+
+  async function handleRegenerate() {
+    if (!effectiveSelected || running) return;
+    const col = columns.find((c) => c.id === effectiveSelected.colId);
+    if (!col) return;
+    await regenerateCell({ docId: effectiveSelected.docId, col, runCell: fetchCell, onUpdate: setCell });
   }
 
   // Exports the grid AS IT IS — running/idle cells come out empty, error
@@ -97,6 +121,10 @@ export function ReviewScreen({ modelLabel }: { modelLabel: string }) {
 
   const counts = gridCounts(docIds, columns, cells);
   const canRun = !running && docIds.length > 0 && columns.length > 0;
+
+  const selectedDoc = effectiveSelected ? docs.find((d) => d.id === effectiveSelected.docId) : undefined;
+  const selectedCol = effectiveSelected ? columns.find((c) => c.id === effectiveSelected.colId) : undefined;
+  const selectedCell = effectiveSelected ? cells[cellKey(effectiveSelected.docId, effectiveSelected.colId)] : undefined;
 
   return (
     <>
@@ -175,7 +203,13 @@ export function ReviewScreen({ modelLabel }: { modelLabel: string }) {
                 </div>
               </div>
               {columns.map((col) => (
-                <GridCell key={col.id} cell={cells[cellKey(doc.id, col.id)]} col={col} />
+                <GridCell
+                  key={col.id}
+                  cell={cells[cellKey(doc.id, col.id)]}
+                  col={col}
+                  selected={effectiveSelected?.docId === doc.id && effectiveSelected?.colId === col.id}
+                  onSelect={() => setSelected({ docId: doc.id, colId: col.id })}
+                />
               ))}
               <div className="flex-1" />
             </div>
@@ -196,6 +230,18 @@ export function ReviewScreen({ modelLabel }: { modelLabel: string }) {
           )}
         </div>
       </div>
+      {selectedDoc && selectedCol && (
+        <CellInspector
+          doc={selectedDoc}
+          col={selectedCol}
+          cell={selectedCell}
+          documents={documents}
+          busy={running || selectedCell?.status === "running"}
+          onRegenerate={() => void handleRegenerate()}
+          onEditPrompt={() => setEditingColId(selectedCol.id)}
+          onClose={() => setSelected(null)}
+        />
+      )}
     </>
   );
 }

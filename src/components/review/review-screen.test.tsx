@@ -192,3 +192,66 @@ describe("ReviewScreen", () => {
     expect(screen.queryByText("Governing law")).not.toBeInTheDocument();
   });
 });
+
+describe("ReviewScreen — inspector", () => {
+  it("opens the inspector when a done cell is clicked and follows selection", async () => {
+    const fetchMock = vi.fn().mockImplementation(async () => cellResponse("Delaware"));
+    vi.stubGlobal("fetch", fetchMock);
+    renderScreen([doc("d1")], ["d1"]);
+
+    fireEvent.click(screen.getByRole("button", { name: /Run all/ }));
+    await waitFor(() => expect(screen.getByText("6/6 complete")).toBeInTheDocument());
+
+    // Click the first done cell (a button whose text contains the value).
+    const cells = screen.getAllByRole("button", { name: /Delaware/ });
+    fireEvent.click(cells[0]);
+
+    // The inspector shows the Regenerate action and the column's full prompt.
+    // The prompt text also appears in the column header preview, so use
+    // getAllByText and assert at least one match.
+    expect(screen.getByRole("button", { name: /Regenerate/ })).toBeInTheDocument();
+    expect(
+      screen.getAllByText(/What is the governing law clause/).length,
+    ).toBeGreaterThan(0);
+  });
+
+  it("regenerates the selected cell in place", async () => {
+    let call = 0;
+    const fetchMock = vi.fn().mockImplementation(async () => {
+      call += 1;
+      return cellResponse(call <= 6 ? "Delaware" : "New York");
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    renderScreen([doc("d1")], ["d1"]);
+
+    fireEvent.click(screen.getByRole("button", { name: /Run all/ }));
+    await waitFor(() => expect(screen.getByText("6/6 complete")).toBeInTheDocument());
+
+    fireEvent.click(screen.getAllByRole("button", { name: /Delaware/ })[0]);
+    fireEvent.click(screen.getByRole("button", { name: /Regenerate/ }));
+
+    // "New York" appears in the cell and also in the open inspector — use
+    // getAllByText to avoid the multiple-match error.
+    await waitFor(() => expect(screen.getAllByText("New York").length).toBeGreaterThan(0));
+  });
+
+  it("closes the inspector when the selected column is deleted", async () => {
+    const fetchMock = vi.fn().mockImplementation(async () => cellResponse("Delaware"));
+    vi.stubGlobal("fetch", fetchMock);
+    renderScreen([doc("d1")], ["d1"]);
+
+    fireEvent.click(screen.getByRole("button", { name: /Run all/ }));
+    await waitFor(() => expect(screen.getByText("6/6 complete")).toBeInTheDocument());
+
+    fireEvent.click(screen.getAllByRole("button", { name: /Delaware/ })[0]);
+    expect(screen.getByRole("button", { name: /Regenerate/ })).toBeInTheDocument();
+
+    // Open the first column's editor and delete it.
+    // "Governing law" appears twice (column header + inspector header); click
+    // the first occurrence, which is the column header's toggle button.
+    fireEvent.click(screen.getAllByText("Governing law")[0]);
+    fireEvent.click(screen.getByRole("button", { name: /Delete/ }));
+
+    expect(screen.queryByRole("button", { name: /Regenerate/ })).not.toBeInTheDocument();
+  });
+});
