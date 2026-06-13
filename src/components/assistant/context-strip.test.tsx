@@ -29,4 +29,22 @@ describe("ContextStrip", () => {
     render(<ContextStrip docs={[]} />);
     expect(screen.getByText(/no documents selected/i)).toBeInTheDocument();
   });
+
+  it("renders the cost and cache-hit pills when figures are provided", () => {
+    render(<ContextStrip docs={[]} cost="$0.0420" cacheHit="87%" />);
+    expect(screen.getByText(/est\. \$0\.0420 \/ msg/)).toBeInTheDocument();
+    expect(screen.getByText(/cache hit · 87%/)).toBeInTheDocument();
+  });
+
+  it("omits the pills when no figures are provided", () => {
+    render(<ContextStrip docs={[]} />);
+    expect(screen.queryByText(/\/ msg/)).not.toBeInTheDocument();
+  });
+
+  it("shows the cost pill alone when there is no cache hit to report", () => {
+    // turn 1 only writes the cache → the caller passes cost but no cacheHit
+    render(<ContextStrip docs={[]} cost="$0.0420" />);
+    expect(screen.getByText(/est\. \$0\.0420 \/ msg/)).toBeInTheDocument();
+    expect(screen.queryByText(/cache hit/)).not.toBeInTheDocument();
+  });
 });

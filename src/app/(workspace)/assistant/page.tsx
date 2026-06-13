@@ -12,9 +12,13 @@ export const dynamic = "force-dynamic";
 // sidebar + DocsProvider live in the layout.
 export default async function AssistantPage() {
   const thread = await loadActiveThread();
+  // Resolve once so the label pill and the pricing lookup can never disagree
+  // about which model was actually called.
+  const model = modelFor("assistant");
   return (
     <AssistantChat
-      modelLabel={modelDisplayLabel(modelFor("assistant"))}
+      modelLabel={modelDisplayLabel(model)}
+      modelId={model}
       initialMessages={thread.messages}
     />
   );

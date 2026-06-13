@@ -9,6 +9,7 @@ import { Pill } from "@/components/ui/pill";
 import { useDocs } from "@/components/documents/docs-context";
 import { useUpload } from "@/components/documents/use-upload";
 import { ceilingState, overCeilingMessage } from "@/lib/context-ceiling";
+import { cacheHitRate, formatCachePct, formatUsageCost } from "@/lib/pricing";
 import { DEFAULT_SYSTEM_PROMPT } from "@/lib/wrapper";
 import {
   displayText,
@@ -30,9 +31,11 @@ import { PromptPanel } from "./prompt-panel";
 // session" archives the thread server-side; browsing the archive is #26.
 export function AssistantChat({
   modelLabel,
+  modelId,
   initialMessages,
 }: {
   modelLabel: string;
+  modelId: string;
   /** The persisted active thread (#22) — seeded into useChat on mount. */
   initialMessages?: AssistantUIMessage[];
 }) {
@@ -125,6 +128,19 @@ export function AssistantChat({
 
   const selectedDocs = documents.filter((d) => selectedIds.includes(d.id));
 
+  // The most recent assistant turn that reported usage drives the strip's
+  // "per-msg" estimate. Hidden until at least one answer has finished.
+  const lastUsage = messages.findLast(
+    (m) => m.role === "assistant" && m.metadata?.usage,
+  )?.metadata?.usage;
+  const stripCost = lastUsage ? formatUsageCost(lastUsage, modelId) : undefined;
+  // Only surface a cache figure once there's an ACTUAL hit: turn 1 merely writes
+  // the cache (0% hit), and "cache hit · 0%" reads as a contradiction. Tie it to a
+  // known cost so the strip never shows a lone cache pill (unpriced model).
+  const hitRate = lastUsage ? cacheHitRate(lastUsage) : 0;
+  const stripCacheHit =
+    stripCost !== undefined && hitRate > 0 ? formatCachePct(hitRate) : undefined;
+
   return (
     <>
       <TopBar
@@ -142,7 +158,7 @@ export function AssistantChat({
           </div>
         }
       />
-      <ContextStrip docs={selectedDocs} />
+      <ContextStrip docs={selectedDocs} cost={stripCost} cacheHit={stripCacheHit} />
       {showPrompt && (
         <PromptPanel
           value={template}
