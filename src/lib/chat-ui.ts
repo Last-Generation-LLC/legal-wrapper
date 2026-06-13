@@ -29,7 +29,9 @@ export function normalizeAssistantUsage(
   providerMetadata?: ProviderMetadata,
 ): TokenUsage {
   const total = usage.inputTokens ?? 0;
-  const cacheRead = usage.cachedInputTokens ?? 0;
+  // Prefer the structured detail; `cachedInputTokens` is deprecated in the AI SDK
+  // but kept as a fallback for older provider shapes.
+  const cacheRead = usage.inputTokenDetails?.cacheReadTokens ?? usage.cachedInputTokens ?? 0;
   // providerMetadata.anthropic is loosely typed (Record<string, unknown>); narrow
   // to the one field we read, then Number(...) coerces away any null/string.
   const anthropic = providerMetadata?.anthropic as { cacheCreationInputTokens?: number } | undefined;

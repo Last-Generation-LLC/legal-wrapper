@@ -283,6 +283,24 @@ describe("POST /api/assistant/chat — streaming", () => {
     );
   });
 
+  it("puts a cache breakpoint on the system prompt so multi-turn chats cache (#17)", async () => {
+    vi.mocked(prisma.document.findMany).mockResolvedValue([DOC]);
+    scriptModel("ok");
+
+    const res = await POST(request(validBody()));
+    await res.text(); // drain so the lazy model call runs
+
+    const mock = vi.mocked(languageModelFor).mock.results[0]
+      .value as MockLanguageModelV3;
+    const call = mock.doStreamCalls[0];
+    // The system prompt must ride the prompt as a system message carrying the
+    // ephemeral cache_control breakpoint — without it, every turn pays full
+    // input price and the strip's cache figure could never rise above 0%.
+    const systemMsg = call.prompt.find((m) => m.role === "system");
+    expect(systemMsg).toBeDefined();
+    expect(JSON.stringify(systemMsg?.providerOptions)).toContain("ephemeral");
+  });
+
   it("persists the incoming thread before the call and the finished turn after (#22)", async () => {
     vi.mocked(prisma.document.findMany).mockResolvedValue([DOC]);
     const text =
