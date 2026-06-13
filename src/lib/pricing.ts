@@ -93,6 +93,14 @@ export function formatUsd(dollars: number): string {
   return `$${dollars.toFixed(2)}`;
 }
 
+/** Formatted dollar cost for a usage record, or `undefined` when the model has
+ *  no known pricing — callers hide the cost indicator rather than render a
+ *  misleading "$0.00" (e.g. a future BYO model not yet in MODEL_PRICING). */
+export function formatUsageCost(usage: TokenUsage, modelId: string): string | undefined {
+  if (!MODEL_PRICING[modelId]) return undefined;
+  return formatUsd(usageCostUsd(usage, modelId));
+}
+
 /** "88%" — whole-percent cache-hit label. */
 export function formatCachePct(rate: number): string {
   return `${Math.round(rate * 100)}%`;

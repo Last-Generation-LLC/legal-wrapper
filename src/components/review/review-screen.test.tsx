@@ -42,7 +42,7 @@ function renderScreen(documents: DocumentMeta[], selected: string[] = []) {
   return render(
     <DocsProvider documents={documents}>
       <SelectDocs ids={selected} />
-      <ReviewScreen modelLabel="SONNET 4.6" />
+      <ReviewScreen modelLabel="SONNET 4.6" modelId="claude-sonnet-4-6" />
     </DocsProvider>,
   );
 }
@@ -111,6 +111,8 @@ describe("ReviewScreen", () => {
     expect(fetchMock).toHaveBeenCalledTimes(12);
     expect(screen.getAllByText("Delaware")).toHaveLength(12);
     expect(screen.getByText("12 done")).toBeInTheDocument();
+    // Cost pill appears in the header once at least one done cell exists.
+    expect(screen.getByText(/^\$/)).toBeInTheDocument();
   });
 
   it("shows error cells when a call fails and keeps Run all re-armed", async () => {

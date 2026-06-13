@@ -6,5 +6,10 @@ import { modelDisplayLabel } from "@/lib/chat-ui";
 // (single source of truth — the pill can't drift from the model the cell
 // route actually calls) and the client screen does the rest.
 export default function ReviewPage() {
-  return <ReviewScreen modelLabel={modelDisplayLabel(modelFor("review"))} />;
+  return (
+    <ReviewScreen
+      modelLabel={modelDisplayLabel(modelFor("review"))}
+      modelId={modelFor("review")}
+    />
+  );
 }

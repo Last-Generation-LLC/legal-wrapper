@@ -22,6 +22,7 @@ import {
   type ReviewColumn,
 } from "@/lib/review-grid";
 import { csvFilename, downloadCsv, gridToCsv } from "@/lib/review-csv";
+import { cacheHitRate, formatCachePct, formatUsageCost, sumUsage, type TokenUsage } from "@/lib/pricing";
 import { CellInspector } from "./cell-inspector";
 import { ColumnHeader } from "./column-header";
 import { GridCell } from "./grid-cell";
@@ -32,7 +33,7 @@ const DOC_COL_WIDTH = 240;
 // The Review screen's single stateful entry — children are presentational.
 // Rows are the shared sidebar selection (locked decision); columns persist to
 // localStorage; cell results are in-memory and reset on reload.
-export function ReviewScreen({ modelLabel }: { modelLabel: string }) {
+export function ReviewScreen({ modelLabel, modelId }: { modelLabel: string; modelId: string }) {
   const { documents, selectedIds } = useDocs();
   const docs = documents.filter((d) => selectedIds.includes(d.id));
   const docIds = docs.map((d) => d.id);
@@ -120,6 +121,18 @@ export function ReviewScreen({ modelLabel }: { modelLabel: string }) {
   }
 
   const counts = gridCounts(docIds, columns, cells);
+
+  // Per-run cost/cache: every done cell's real usage, summed. Idle/running/error
+  // cells contribute nothing. Undefined figures hide the pills until something runs.
+  const doneUsages: TokenUsage[] = Object.values(cells)
+    .filter((c): c is Extract<CellResult, { status: "done" }> => c.status === "done")
+    .map((c) => c.usage);
+  const runUsage = doneUsages.length > 0 ? sumUsage(doneUsages) : null;
+  // formatUsageCost returns undefined for an unpriced model, so the pill hides
+  // rather than showing a misleading $0.00 (both figures move together).
+  const runCost = runUsage ? formatUsageCost(runUsage, modelId) : undefined;
+  const runCachePct = runUsage ? formatCachePct(cacheHitRate(runUsage)) : undefined;
+
   const canRun = !running && docIds.length > 0 && columns.length > 0;
 
   const selectedDoc = effectiveSelected ? docs.find((d) => d.id === effectiveSelected.docId) : undefined;
@@ -149,7 +162,7 @@ export function ReviewScreen({ modelLabel }: { modelLabel: string }) {
           </div>
         }
       />
-      <StatusBar rows={docIds.length} columns={columns.length} counts={counts} />
+      <StatusBar rows={docIds.length} columns={columns.length} counts={counts} cost={runCost} cachePct={runCachePct} />
 
       <div className="flex-1 overflow-auto bg-bg">
         <div

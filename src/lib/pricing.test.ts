@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   cacheHitRate,
   formatCachePct,
+  formatUsageCost,
   formatUsd,
   sumUsage,
   usageCostUsd,
@@ -83,6 +84,15 @@ describe("formatUsd", () => {
   });
   it("renders an exact zero plainly", () => {
     expect(formatUsd(0)).toBe("$0.00");
+  });
+});
+
+describe("formatUsageCost", () => {
+  it("formats the cost for a known model", () => {
+    expect(formatUsageCost({ ...zero, uncachedInputTokens: 1_000_000 }, "claude-sonnet-4-6")).toBe("$3.00");
+  });
+  it("is undefined for an unpriced model (hide rather than show $0.00)", () => {
+    expect(formatUsageCost({ ...zero, uncachedInputTokens: 1000 }, "no-such-model")).toBeUndefined();
   });
 });
 

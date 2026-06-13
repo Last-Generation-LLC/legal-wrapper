@@ -7,10 +7,16 @@ export function StatusBar({
   rows,
   columns,
   counts,
+  cost,
+  cachePct,
 }: {
   rows: number;
   columns: number;
   counts: { total: number; done: number; running: number; error: number };
+  /** Preformatted per-run cost (e.g. "$0.0123"); omitted when nothing has run. */
+  cost?: string;
+  /** Preformatted cache-hit percent (e.g. "42%"); omitted when nothing has run. */
+  cachePct?: string;
 }) {
   const pct = (n: number) => (counts.total === 0 ? 0 : (n / counts.total) * 100);
 
@@ -38,6 +44,18 @@ export function StatusBar({
           <div className="bg-amber" style={{ width: `${pct(counts.running)}%` }} />
           <div className="bg-red" style={{ width: `${pct(counts.error)}%` }} />
         </div>
+        {/* cost + cachePct are provided as a pair (or not at all) — a lone
+            cache pill without a cost reads confusingly. */}
+        {cost && (
+          <Pill tone="default" title="Estimated cost of this grid run">
+            {cost}
+          </Pill>
+        )}
+        {cachePct && (
+          <Pill tone="default" title="Share of input tokens served from cache">
+            cache · {cachePct}
+          </Pill>
+        )}
         <Pill tone="ok">
           <span className="inline-block size-1.5 rounded-full bg-green" /> {counts.done} done
         </Pill>
