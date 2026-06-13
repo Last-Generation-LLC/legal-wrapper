@@ -119,7 +119,14 @@ export function CellInspector({
             <Btn variant="ghost" size="sm" icon="edit" onClick={onEditPrompt}>
               Edit prompt
             </Btn>
-            <Btn variant="ghost" size="sm" icon="eye" disabled title="Source view — coming soon">
+            <Btn
+              variant="ghost"
+              size="sm"
+              icon="eye"
+              disabled
+              title="Source view — coming soon"
+              aria-label="View source — coming soon"
+            >
               View source
             </Btn>
           </div>
