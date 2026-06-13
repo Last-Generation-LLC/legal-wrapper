@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
-import { render, screen } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import { render, screen, fireEvent } from "@testing-library/react";
+import { describe, expect, it, vi } from "vitest";
 import type { VerifiedAnswer } from "@/lib/contract";
 import type { CellResult, CellUsage, ReviewColumn } from "@/lib/review-grid";
 import { GridCell } from "./grid-cell";
@@ -71,5 +71,22 @@ describe("GridCell", () => {
   it("renders numeric columns in mono", () => {
     render(<GridCell cell={done({ value: "3" })} col={{ ...col, numeric: true }} />);
     expect(screen.getByText("3").className).toContain("font-mono");
+  });
+
+  it("fires onSelect when a done cell is clicked", () => {
+    const onSelect = vi.fn();
+    render(<GridCell cell={done({})} col={col} onSelect={onSelect} />);
+    fireEvent.click(screen.getByRole("button"));
+    expect(onSelect).toHaveBeenCalledTimes(1);
+  });
+
+  it("carries the selection outline when selected", () => {
+    render(<GridCell cell={done({})} col={col} selected onSelect={() => {}} />);
+    expect(screen.getByRole("button").className).toContain("outline-amber");
+  });
+
+  it("does not render a button for non-done cells", () => {
+    render(<GridCell cell={{ status: "running" }} col={col} onSelect={() => {}} />);
+    expect(screen.queryByRole("button")).not.toBeInTheDocument();
   });
 });
