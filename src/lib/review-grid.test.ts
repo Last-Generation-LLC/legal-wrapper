@@ -21,10 +21,10 @@ import {
 } from "./review-grid";
 
 const usage: CellUsage = {
-  inputTokens: 100,
-  outputTokens: 20,
+  uncachedInputTokens: 100,
   cacheReadInputTokens: 0,
-  cacheCreationInputTokens: 0,
+  cacheWriteInputTokens: 0,
+  outputTokens: 20,
 };
 
 function answerOf(value: string): VerifiedAnswer {
@@ -338,10 +338,10 @@ describe("regenerateCell", () => {
   const col = { id: "c1", title: "Governing law", prompt: "What law?", width: 160 };
   const answer = { value: "Delaware", citations: [], confidence: 0.9 };
   const usage = {
-    inputTokens: 100,
-    outputTokens: 10,
+    uncachedInputTokens: 100,
     cacheReadInputTokens: 0,
-    cacheCreationInputTokens: 0,
+    cacheWriteInputTokens: 0,
+    outputTokens: 10,
   };
 
   it("transitions running → done on success, stamping promptUsed", async () => {

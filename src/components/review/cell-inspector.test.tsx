@@ -24,10 +24,10 @@ const col: ReviewColumn = {
 };
 
 const usage: CellUsage = {
-  inputTokens: 100,
-  outputTokens: 20,
+  uncachedInputTokens: 100,
   cacheReadInputTokens: 0,
-  cacheCreationInputTokens: 0,
+  cacheWriteInputTokens: 0,
+  outputTokens: 20,
 };
 
 const answer: VerifiedAnswer = {

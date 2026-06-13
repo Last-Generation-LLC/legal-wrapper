@@ -146,10 +146,10 @@ describe("POST /api/review/cell — the call", () => {
     expect(body.answer.citations[0].verified).toBe(true);
     expect(body.answer.confidence).toBe(0.95);
     expect(body.usage).toEqual({
-      inputTokens: 120,
-      outputTokens: 45,
+      uncachedInputTokens: 120,
       cacheReadInputTokens: 3100,
-      cacheCreationInputTokens: 0,
+      cacheWriteInputTokens: 0,
+      outputTokens: 45,
     });
   });
 
@@ -235,7 +235,7 @@ describe("POST /api/review/cell — debuggable errors", () => {
     const res = await POST(request(validBody()));
     const body = await res.json();
     expect(body.usage.cacheReadInputTokens).toBe(0);
-    expect(body.usage.cacheCreationInputTokens).toBe(0);
+    expect(body.usage.cacheWriteInputTokens).toBe(0);
   });
 
   it("502 naming the stop_reason when the model returned no tool call", async () => {

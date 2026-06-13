@@ -51,10 +51,10 @@ function cellResponse(value: string) {
   return Response.json({
     answer: { value, citations: [], confidence: 0.95 },
     usage: {
-      inputTokens: 100,
-      outputTokens: 10,
+      uncachedInputTokens: 100,
       cacheReadInputTokens: 0,
-      cacheCreationInputTokens: 0,
+      cacheWriteInputTokens: 0,
+      outputTokens: 10,
     },
   });
 }

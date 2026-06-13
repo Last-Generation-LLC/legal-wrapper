@@ -4,10 +4,10 @@ import { cellKey, type CellMap, type CellUsage } from "@/lib/review-grid";
 import { csvField, csvFilename, gridToCsv } from "./review-csv";
 
 const usage: CellUsage = {
-  inputTokens: 1,
-  outputTokens: 1,
+  uncachedInputTokens: 1,
   cacheReadInputTokens: 0,
-  cacheCreationInputTokens: 0,
+  cacheWriteInputTokens: 0,
+  outputTokens: 1,
 };
 
 function done(answer: Partial<VerifiedAnswer>) {

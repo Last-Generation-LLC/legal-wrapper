@@ -139,15 +139,16 @@ export async function POST(request: Request) {
     new Map([[doc.id, doc.extractedText]]),
   );
 
-  // usage rides along so #17 (cost + cache surfacing) is pure frontend. The
-  // cache fields are also how the AC's "cache hits register" is verified.
+  // usage rides along so #17 (cost + cache surfacing) is pure frontend. Raw-SDK
+  // `input_tokens` is the UNCACHED count; total input also includes the two
+  // cache fields, which the pricing module bills at their own multipliers.
   return Response.json({
     answer: verified,
     usage: {
-      inputTokens: message.usage.input_tokens,
-      outputTokens: message.usage.output_tokens,
+      uncachedInputTokens: message.usage.input_tokens,
       cacheReadInputTokens: message.usage.cache_read_input_tokens ?? 0,
-      cacheCreationInputTokens: message.usage.cache_creation_input_tokens ?? 0,
+      cacheWriteInputTokens: message.usage.cache_creation_input_tokens ?? 0,
+      outputTokens: message.usage.output_tokens,
     },
   });
 }

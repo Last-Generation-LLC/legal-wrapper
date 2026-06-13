@@ -10,6 +10,7 @@
 
 import * as z from "zod";
 import type { VerifiedAnswer } from "@/lib/contract";
+import type { TokenUsage } from "@/lib/pricing";
 
 /** Global in-flight request cap — protects rate limits, keeps caching effective. */
 export const RUN_CONCURRENCY = 5;
@@ -101,13 +102,11 @@ export function newColumn(): ReviewColumn {
   return { id: crypto.randomUUID(), title: "New column", prompt: "", width: 200 };
 }
 
-/** Usage fields the cell route returns — carried on done cells for #17. */
-export type CellUsage = {
-  inputTokens: number;
-  outputTokens: number;
-  cacheReadInputTokens: number;
-  cacheCreationInputTokens: number;
-};
+/** Usage fields the cell route returns — carried on done cells for #17.
+ *  Canonical shape lives in pricing.ts; re-exported here as the grid's
+ *  historical name so existing `import { CellUsage } from "@/lib/review-grid"`
+ *  callers keep working. */
+export type CellUsage = TokenUsage;
 
 /**
  * One cell's state. "Idle" is the absence of an entry in the map. A done cell
