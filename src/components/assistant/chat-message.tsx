@@ -4,30 +4,14 @@ import { Btn } from "@/components/ui/btn";
 import { ConfidenceDot } from "@/components/ui/confidence-dot";
 import { Icon } from "@/components/ui/icon";
 import { Pill } from "@/components/ui/pill";
-import { docLabel } from "@/lib/doc-display";
+import { citationLabel } from "@/lib/doc-display";
 import type { DocumentMeta } from "@/lib/documents";
-import type { VerifiedCitation } from "@/lib/contract";
 import {
   displayText,
   formatClock,
   verifiedAnswerOf,
   type AssistantUIMessage,
 } from "@/lib/chat-ui";
-
-// Handoff: citation pills carry the doc name without its file extension.
-function citationDocName(citation: VerifiedCitation, documents: DocumentMeta[]): string {
-  const doc = documents.find((d) => d.id === citation.docId);
-  if (!doc) return citation.docId;
-  return docLabel(doc).replace(/\.(pdf|docx)$/i, "");
-}
-
-function citationLabel(citation: VerifiedCitation, documents: DocumentMeta[]): string {
-  let label = citationDocName(citation, documents);
-  if (citation.section) label += ` ${citation.section}`;
-  if (citation.page != null) label += ` · p.${citation.page}`;
-  if (!citation.verified) label += " · unverified";
-  return label;
-}
 
 // Handoff renderRich: **bold** spans become <strong>; everything else is
 // pre-wrapped plain text. Deliberately not a markdown renderer — the system
