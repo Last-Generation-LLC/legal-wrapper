@@ -53,8 +53,8 @@ export function MessageThread({
         {messages.length === 0 && !busy ? (
           <EmptyState
             icon="chat"
-            heading="Ask about your documents"
-            hint="Select documents in the sidebar, then ask a question about them."
+            heading="Ask a legal question"
+            hint="Ask anything in law, or select documents in the sidebar to ground answers in them."
           />
         ) : (
           messages.map((m) => (

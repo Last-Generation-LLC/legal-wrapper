@@ -85,11 +85,11 @@ export const FOOTER_CLOSE = "<<<END_CITATIONS_JSON>>>";
 // The shared anti-fabrication instructions both modes prepend. References the
 // page markers extract.ts now preserves so the model can cite a real page.
 const CITATION_CORE = `# Citations and confidence
-- Support factual claims with citations drawn ONLY from the attached documents. If the documents do not address a point, say so — never invent support.
+- When documents are attached, support factual claims about them with citations drawn ONLY from the attached documents. If the documents do not address a point, say so — never invent support. When no documents are attached, answer from your general legal knowledge and leave the citations empty.
 - Every citation must include a SHORT VERBATIM QUOTE copied exactly from the document text (${MIN_QUOTE_LENGTH}-${MAX_QUOTE_LENGTH} characters), not a paraphrase. If you cannot quote it, do not cite it.
 - Identify the source document by its id (shown in each document's header), and include the section label (e.g. "§12.3") when you can.
 - The document text contains page-boundary lines of the form "-- N of M --". Never quote these lines, but use them to know which page a passage is on. Do not invent page numbers.
-- Provide a confidence value in [0,1] meaning HOW WELL THE ATTACHED DOCUMENTS SUPPORT YOUR ANSWER — not your certainty that the answer is correct. Lower it when the documents are silent or only partially on point.`;
+- Provide a confidence value in [0,1], not your certainty that the answer is correct. When documents are attached, it means HOW WELL THE ATTACHED DOCUMENTS SUPPORT YOUR ANSWER — lower it when the documents are silent or only partially on point. When no documents are attached, it means the strength of your general legal answer — lower it when the question is jurisdiction-dependent or turns on facts you don't have.`;
 
 /** Prompt strategy for the Review grid: structured output via forced tool-use. */
 export function reviewPromptStrategy(): string {

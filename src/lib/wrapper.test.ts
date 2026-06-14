@@ -2,6 +2,8 @@ import { describe, it, expect } from "vitest";
 import {
   DOCUMENTS_TOKEN,
   DEFAULT_SYSTEM_PROMPT,
+  CONTRACT_REVIEW_SYSTEM_PROMPT,
+  NO_DOCUMENTS_SENTINEL,
   templateHasDocumentsToken,
   renderDocuments,
   composeSystemPrompt,
@@ -31,11 +33,23 @@ describe("default prompt + token", () => {
     expect(DOCUMENTS_TOKEN).toBe("{{DOCUMENTS}}");
   });
 
-  it("ships the mock contract-review prompt containing the token", () => {
+  it("ships the adaptive general-legal prompt containing the token", () => {
     expect(DEFAULT_SYSTEM_PROMPT).toContain(
+      "You are a legal assistant for an in-house legal team.",
+    );
+    // Adaptive: it must speak to both modes (docs attached vs. general knowledge).
+    expect(DEFAULT_SYSTEM_PROMPT).toContain("When documents are attached");
+    expect(DEFAULT_SYSTEM_PROMPT).toContain("When no documents are attached");
+    expect(DEFAULT_SYSTEM_PROMPT).toContain(DOCUMENTS_TOKEN);
+  });
+
+  it("archives the old contract-review prompt intact for the future template switcher (#23/#28)", () => {
+    expect(CONTRACT_REVIEW_SYSTEM_PROMPT).toContain(
       "You are a contract review assistant for an in-house legal team.",
     );
-    expect(DEFAULT_SYSTEM_PROMPT).toContain(DOCUMENTS_TOKEN);
+    expect(CONTRACT_REVIEW_SYSTEM_PROMPT).toContain(DOCUMENTS_TOKEN);
+    // It is no longer the shipped default.
+    expect(CONTRACT_REVIEW_SYSTEM_PROMPT).not.toBe(DEFAULT_SYSTEM_PROMPT);
   });
 });
 
@@ -85,8 +99,8 @@ describe("renderDocuments", () => {
     );
   });
 
-  it("returns an empty string for no docs", () => {
-    expect(renderDocuments([])).toBe("");
+  it("returns the no-documents sentinel for no docs (#23)", () => {
+    expect(renderDocuments([])).toBe(NO_DOCUMENTS_SENTINEL);
   });
 });
 
@@ -95,7 +109,7 @@ describe("composeSystemPrompt", () => {
     const out = composeSystemPrompt([doc({ filename: "a.pdf", extractedText: "AAA" })]);
     expect(out).not.toContain("{{DOCUMENTS}}"); // token consumed
     expect(out).toContain("===== DOCUMENT: a.pdf (id: d_test) =====\nAAA");
-    expect(out).toContain("You are a contract review assistant"); // rest of prompt intact
+    expect(out).toContain("You are a legal assistant"); // rest of prompt intact
   });
 
   it("uses a caller-supplied template (the editable-panel path)", () => {
@@ -127,9 +141,9 @@ describe("composeSystemPrompt", () => {
     expect(out).toContain("price is $5 & rising $& done");
   });
 
-  it("replaces an empty selection with an empty block", () => {
+  it("replaces an empty selection with the no-documents sentinel (#23)", () => {
     const out = composeSystemPrompt([], "before {{DOCUMENTS}} after");
-    expect(out).toBe("before  after");
+    expect(out).toBe(`before ${NO_DOCUMENTS_SENTINEL} after`);
   });
 });
 
@@ -150,7 +164,7 @@ describe("composeAssistantSystemPrompt", () => {
 
   it("defaults to DEFAULT_SYSTEM_PROMPT when no template is given", () => {
     const result = composeAssistantSystemPrompt([msa]);
-    expect(result.startsWith("You are a contract review assistant")).toBe(true);
+    expect(result.startsWith("You are a legal assistant")).toBe(true);
     expect(result).toContain("The term of this Agreement");
     expect(result.endsWith(assistantPromptStrategy())).toBe(true);
   });

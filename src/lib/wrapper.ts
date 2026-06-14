@@ -9,12 +9,38 @@ import { assistantPromptStrategy, reviewPromptStrategy } from "@/lib/contract";
 export const DOCUMENTS_TOKEN = "{{DOCUMENTS}}";
 
 /**
- * The shipped default system prompt — adopted verbatim from the design mock
- * (`design_handoff_legal_wrapper/components/assistant.jsx`, `DEFAULT_SYS_PROMPT`).
- * It is editable at runtime (the transparency thesis), so this only needs to be
- * a strong starting point. The trailing `{{DOCUMENTS}}` is filled per call.
+ * The shipped default system prompt (issue #23) — a single ADAPTIVE prompt that
+ * works whether or not documents are attached: it answers general legal
+ * questions from the model's own knowledge and grounds claims in documents when
+ * they're present. One editable template (the transparency thesis), no
+ * mode-switching logic. The trailing `{{DOCUMENTS}}` is filled per call — with
+ * the `NO_DOCUMENTS_SENTINEL` when nothing is selected, so the model
+ * unambiguously sees the no-doc mode.
  */
-export const DEFAULT_SYSTEM_PROMPT = `You are a contract review assistant for an in-house legal team.
+export const DEFAULT_SYSTEM_PROMPT = `You are a legal assistant for an in-house legal team.
+
+# Behavior
+- Answer the user's legal questions directly and precisely.
+- When documents are attached, ground every factual claim about them in their text. Prefer concrete clause references (section number, page) over summaries, and if a document does not address a point, say so explicitly.
+- When no documents are attached, answer from your general legal knowledge. Be explicit when an answer turns on jurisdiction or on facts you don't have.
+- When comparing documents, structure the response as a numbered list of material differences.
+- Do not hedge with "I am not a lawyer." The user is a lawyer.
+- Do not suggest consulting counsel. The user is counsel.
+
+# Output
+- Plain prose. Short paragraphs. Bold for the top-line finding of each numbered point.
+- When citing a document, use [DocName §X, p.N]. No hallucinated page numbers — only cite what you can locate.
+
+# Attached documents
+${DOCUMENTS_TOKEN}`;
+
+/**
+ * The original contract-review default prompt (pre-#23), preserved verbatim as a
+ * named archive — NOT dead code. It becomes the first entry in a future
+ * role-based template switcher (#28). Do not delete; keep it intact so the
+ * switcher can offer it unchanged.
+ */
+export const CONTRACT_REVIEW_SYSTEM_PROMPT = `You are a contract review assistant for an in-house legal team.
 
 # Behavior
 - Ground every factual claim in the attached documents. If a document does not address a point, say so explicitly.
@@ -41,13 +67,24 @@ function documentName(doc: Pick<Document, "filename" | "title">): string {
 }
 
 /**
+ * The block rendered into `{{DOCUMENTS}}` when no documents are selected (#23).
+ * An explicit sentinel beats an empty string: it tells the model in plain words
+ * that it's in general-knowledge mode, instead of leaving a blank the model has
+ * to interpret.
+ */
+export const NO_DOCUMENTS_SENTINEL =
+  "(No documents attached — answer from general legal knowledge.)";
+
+/**
  * Render the selected documents into the block that replaces `{{DOCUMENTS}}`.
  * Each doc becomes `===== DOCUMENT: <name> (id: <id>) =====` then its full
  * extracted text; blocks are joined by a blank line in selection order. The
  * Prisma id is shown so the model can cite a `docId` that `verifyAnswer` can
- * actually look up — without it, citations could never verify.
+ * actually look up — without it, citations could never verify. With no docs
+ * selected, returns `NO_DOCUMENTS_SENTINEL` rather than an empty string (#23).
  */
 export function renderDocuments(docs: Document[]): string {
+  if (docs.length === 0) return NO_DOCUMENTS_SENTINEL;
   return docs
     .map((d) => `===== DOCUMENT: ${documentName(d)} (id: ${d.id}) =====\n${d.extractedText}`)
     .join("\n\n");

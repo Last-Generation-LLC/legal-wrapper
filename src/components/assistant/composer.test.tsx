@@ -28,7 +28,7 @@ describe("Composer", () => {
   it("sends on ⌘↵ and on Ctrl+Enter", () => {
     const onSend = vi.fn();
     renderComposer({ value: "question", onSend });
-    const textarea = screen.getByPlaceholderText(/ask about/i);
+    const textarea = screen.getByPlaceholderText(/ask a legal question/i);
     fireEvent.keyDown(textarea, { key: "Enter", metaKey: true });
     fireEvent.keyDown(textarea, { key: "Enter", ctrlKey: true });
     expect(onSend).toHaveBeenCalledTimes(2);
@@ -43,14 +43,14 @@ describe("Composer", () => {
     });
     expect(screen.getByRole("alert").textContent).toMatch(/over the 180\.0k/);
     expect(screen.getByRole("button", { name: /Send/ })).toBeDisabled();
-    fireEvent.keyDown(screen.getByPlaceholderText(/ask about/i), { key: "Enter", metaKey: true });
+    fireEvent.keyDown(screen.getByPlaceholderText(/ask a legal question/i), { key: "Enter", metaKey: true });
     expect(onSend).not.toHaveBeenCalled();
   });
 
   it("does not send a blank message", () => {
     const onSend = vi.fn();
     renderComposer({ value: "   ", onSend });
-    fireEvent.keyDown(screen.getByPlaceholderText(/ask about/i), { key: "Enter", metaKey: true });
+    fireEvent.keyDown(screen.getByPlaceholderText(/ask a legal question/i), { key: "Enter", metaKey: true });
     expect(screen.getByRole("button", { name: /send/i })).toBeDisabled();
     expect(onSend).not.toHaveBeenCalled();
   });
@@ -71,7 +71,7 @@ describe("Composer", () => {
     const onCancelEdit = vi.fn();
     renderComposer({ editing: true, value: "edited", onCancelEdit });
     expect(screen.getByText(/editing/i)).toBeInTheDocument();
-    fireEvent.keyDown(screen.getByPlaceholderText(/ask about/i), { key: "Escape" });
+    fireEvent.keyDown(screen.getByPlaceholderText(/ask a legal question/i), { key: "Escape" });
     expect(onCancelEdit).toHaveBeenCalledOnce();
   });
 

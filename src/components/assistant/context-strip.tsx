@@ -25,7 +25,7 @@ export function ContextStrip({
       </span>
       {docs.length === 0 ? (
         <span className="font-mono text-[10.5px] text-dim">
-          no documents selected — answers will not be grounded
+          no documents selected — answering from general legal knowledge
         </span>
       ) : (
         docs.map((d) => (

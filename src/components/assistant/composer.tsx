@@ -63,7 +63,7 @@ export function Composer({
             value={value}
             onChange={(e) => onChange(e.target.value)}
             onKeyDown={onKeyDown}
-            placeholder="Ask about the selected documents…"
+            placeholder="Ask a legal question, or about the selected documents…"
             rows={2}
             className="max-h-[180px] min-h-[52px] w-full resize-none bg-transparent text-[13.5px] leading-[1.5] text-foreground outline-none placeholder:text-dim"
           />
