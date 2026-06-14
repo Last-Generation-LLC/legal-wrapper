@@ -18,4 +18,6 @@ All grouped issues resolved and closed.
 None.
 
 ## Tasks
+- 26 — Session list UI: browse, reopen, rename, delete archived chats (medium, medium)
+- 27 — Review cell inspector: follow-up polish (#14) (low, small)
 - 20 — BYO API key: let users supply their own Anthropic API key in the UI (low, medium)
