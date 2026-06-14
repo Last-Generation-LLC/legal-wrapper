@@ -14,7 +14,6 @@ export function Composer({
   busy,
   blocked,
   uploading,
-  uploadError,
   docCount,
   editing,
 }: {
@@ -28,7 +27,6 @@ export function Composer({
   /** Ceiling-block message (#16): sending is disabled and the reason shown. */
   blocked: string | null;
   uploading: boolean;
-  uploadError: string | null;
   docCount: number;
   /** True when the draft is an edit of an earlier message (Esc cancels). */
   editing: boolean;
@@ -55,11 +53,6 @@ export function Composer({
   return (
     <div className="border-t border-border-soft px-8 pb-5 pt-3">
       <div className="mx-auto max-w-[780px]">
-        {uploadError && (
-          <div role="alert" className="mb-2 font-mono text-[10.5px] text-red">
-            {uploadError}
-          </div>
-        )}
         {blocked && (
           <div role="alert" className="mb-2 font-mono text-[10.5px] text-red">
             {blocked}

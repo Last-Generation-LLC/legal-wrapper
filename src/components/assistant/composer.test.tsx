@@ -13,7 +13,6 @@ function renderComposer(props: Partial<React.ComponentProps<typeof Composer>> = 
     busy: false,
     blocked: null,
     uploading: false,
-    uploadError: null,
     docCount: 2,
     editing: false,
   };
@@ -83,10 +82,5 @@ describe("Composer", () => {
     const file = new File(["%PDF"], "new.pdf", { type: "application/pdf" });
     fireEvent.change(input, { target: { files: [file] } });
     expect(onAttach).toHaveBeenCalledWith(file);
-  });
-
-  it("surfaces an upload error inline", () => {
-    renderComposer({ uploadError: "Scanned PDFs are not supported." });
-    expect(screen.getByRole("alert")).toHaveTextContent("Scanned PDFs are not supported.");
   });
 });

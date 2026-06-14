@@ -68,7 +68,8 @@ export function AssistantChat({
   const editTarget = resolveEditTarget(messages, editingId);
 
   // Attach = upload + select, so the new doc is in context for the next send.
-  const { upload, uploading, error: uploadError } = useUpload((doc) => toggle(doc.id));
+  // Upload/parse failures surface as a toast inside the hook (#18).
+  const { upload, uploading } = useUpload((doc) => toggle(doc.id));
 
   // docIds/template ride EVERY call as request-level body (evaluated at send
   // time — hook-level body would go stale when the selection changes).
@@ -197,7 +198,6 @@ export function AssistantChat({
         busy={busy}
         blocked={blocked}
         uploading={uploading}
-        uploadError={uploadError}
         docCount={selectedCount}
         editing={editTarget !== null}
       />

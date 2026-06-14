@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Inter_Tight, Instrument_Serif, JetBrains_Mono } from "next/font/google";
+import { Toaster } from "sonner";
 import "./globals.css";
 
 // next/font self-hosts these at build time (satisfies the "self-host in
@@ -38,6 +39,26 @@ export default function RootLayout({
     >
       <body className="bg-bg text-foreground min-h-full flex flex-col">
         {children}
+        {/* #18: app-wide toast layer. Unstyled + classNames so toasts wear the
+            project's tokens (panel bg, mono, amber/red) instead of sonner's
+            defaults. Errors get a red left rule; only upload/parse failures
+            toast — chat and grid errors stay inline by decision. */}
+        <Toaster
+          theme="dark"
+          position="bottom-right"
+          offset={20}
+          toastOptions={{
+            unstyled: true,
+            classNames: {
+              toast:
+                "flex w-full items-start gap-2.5 rounded-[4px] border border-border bg-panel px-3.5 py-3 shadow-lg font-mono text-[11px] leading-relaxed text-foreground",
+              title: "font-medium text-foreground",
+              description: "text-dim",
+              error: "border-l-2 border-l-red",
+              closeButton: "text-dim hover:text-foreground",
+            },
+          }}
+        />
       </body>
     </html>
   );
