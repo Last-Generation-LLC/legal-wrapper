@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { TopBar } from "@/components/layout/top-bar";
 import { Btn } from "@/components/ui/btn";
+import { EmptyState } from "@/components/ui/empty-state";
 import { Icon } from "@/components/ui/icon";
 import { Pill } from "@/components/ui/pill";
 import { useDocs } from "@/components/documents/docs-context";
@@ -228,13 +229,23 @@ export function ReviewScreen({ modelLabel, modelId }: { modelLabel: string; mode
             </div>
           ))}
 
-          {/* "Add documents" points at the sidebar (locked decision) — the
-              handoff's button under the rows, rendered as a hint, plus a
-              taller empty state when there are no rows at all. */}
+          {/* "Add documents" points at the sidebar (locked decision). The
+              empty states stack by precedence: no rows first (you select docs
+              to get rows), then no columns (#18). With both rows and columns
+              present, a quiet hint to add more rows sits under the grid. */}
           {docs.length === 0 ? (
-            <div className="px-5 py-16 text-center font-mono text-[10.5px] leading-relaxed text-dim">
-              Select documents in the sidebar to add rows.
-            </div>
+            <EmptyState
+              icon="doc"
+              heading="No documents selected"
+              hint="Select documents in the sidebar to add rows to the grid."
+            />
+          ) : columns.length === 0 ? (
+            <EmptyState
+              icon="grid"
+              heading="No columns yet"
+              hint="Add a prompt column to run across every selected document."
+              action={{ label: "Add column", icon: "plus", onClick: addColumn }}
+            />
           ) : (
             <div className="flex items-center gap-1.5 px-3.5 py-2.5 font-mono text-[10.5px] text-dim">
               <Icon name="plus" size={11} />

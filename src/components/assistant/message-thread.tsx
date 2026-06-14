@@ -1,6 +1,7 @@
 import { useEffect, useRef } from "react";
 import type { ChatStatus } from "ai";
 import { Btn } from "@/components/ui/btn";
+import { EmptyState } from "@/components/ui/empty-state";
 import type { DocumentMeta } from "@/lib/documents";
 import { estimateTokens, type AssistantUIMessage } from "@/lib/chat-ui";
 import { ChatMessage } from "./chat-message";
@@ -50,9 +51,11 @@ export function MessageThread({
     <div ref={scrollRef} className="flex-1 overflow-y-auto py-6">
       <div className="mx-auto max-w-[780px] px-8">
         {messages.length === 0 && !busy ? (
-          <div className="py-16 text-center font-mono text-[10.5px] leading-relaxed text-dim">
-            Select documents in the sidebar, then ask a question about them.
-          </div>
+          <EmptyState
+            icon="chat"
+            heading="Ask about your documents"
+            hint="Select documents in the sidebar, then ask a question about them."
+          />
         ) : (
           messages.map((m) => (
             <ChatMessage

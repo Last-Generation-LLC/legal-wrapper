@@ -5,7 +5,9 @@ import type { DocumentMeta } from "@/lib/documents";
 
 const refresh = vi.fn();
 vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh }) }));
+vi.mock("sonner", () => ({ toast: { error: vi.fn() } }));
 
+import { toast } from "sonner";
 import { DocsProvider } from "./docs-context";
 import { DocSidebar } from "./doc-sidebar";
 
@@ -64,7 +66,7 @@ describe("DocSidebar", () => {
     expect(fetchMock).toHaveBeenCalledWith("/api/upload", expect.objectContaining({ method: "POST" }));
   });
 
-  it("surfaces the API error message inline and does not refresh on failure", async () => {
+  it("toasts the API error message and does not refresh on failure (#18)", async () => {
     const fetchMock = vi.fn().mockResolvedValue({
       ok: false, status: 422, json: async () => ({ error: "Could not extract text from this PDF." }),
     });
@@ -75,7 +77,9 @@ describe("DocSidebar", () => {
     const file = new File(["bad"], "scan.pdf", { type: "application/pdf" });
     fireEvent.change(input, { target: { files: [file] } });
 
-    expect(await screen.findByRole("alert")).toHaveTextContent("Could not extract text from this PDF.");
+    await waitFor(() =>
+      expect(toast.error).toHaveBeenCalledWith("Could not extract text from this PDF."),
+    );
     expect(refresh).not.toHaveBeenCalled();
   });
 });
