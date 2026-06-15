@@ -45,3 +45,6 @@ next-env.d.ts
 
 # PM per-issue worktrees
 .worktrees/
+
+# local demo corpora — document files stay on your machine, never in git
+demo-corpora/

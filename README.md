@@ -81,6 +81,14 @@ Then open <http://localhost:3000>.
    grid. Each cell is one model call; results fill in as they complete. Click a
    cell to see the full answer, or export the whole grid to CSV.
 
+## Running a demo
+
+If you want to show the workspace off, [`docs/demo-script.md`](./docs/demo-script.md)
+walks through three demos and the corpora that suit them, and
+[`docs/prompt-testing.md`](./docs/prompt-testing.md) is a checklist for testing
+your prompts ahead of time. Your demo documents live in a local `demo-corpora/`
+folder, which is gitignored — keep them on your machine, not in the repo.
+
 ## Known limits
 
 - **Context ceiling (~180k tokens).** There is no retrieval step — the full text
