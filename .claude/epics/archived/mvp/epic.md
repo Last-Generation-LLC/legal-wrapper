@@ -1,6 +1,6 @@
 ---
 title: "Legal Document Workspace MVP"
-status: open
+status: done
 prd: mvp
 created: 2026-06-08
 github_issue: 1
