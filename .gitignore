@@ -48,3 +48,9 @@ next-env.d.ts
 
 # local demo corpora — document files stay on your machine, never in git
 demo-corpora/
+
+# PM spec-review HTML artifacts — one-time review docs, regenerated on demand
+.claude/reviews/
+
+# Playwright MCP scratch output (screenshots, page snapshots, console logs)
+.playwright-mcp/
