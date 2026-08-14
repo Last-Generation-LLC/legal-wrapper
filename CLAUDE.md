@@ -243,7 +243,21 @@ PM tasks are built in PM-managed git worktrees, and `/pm:ship` is the single
 finalizer. When you finish implementing a PM task and reach superpowers'
 `finishing-a-development-branch` step, choose **"Keep the branch as-is, I'll
 handle it later."** Do **not** merge, open a PR, delete the branch, or remove
-the worktree yourself. Then **park the dispatch marker** so fleet surfaces
+the worktree yourself.
+
+First, when the final whole-implementation review passes, **record the
+review marker** — set `reviewed_sha` in the task frontmatter to the
+reviewed HEAD and commit it as its own logical unit:
+
+    sha="$(git rev-parse HEAD)"
+    # set `reviewed_sha: $sha` in .claude/epics/<epic>/<n>.md frontmatter
+    git add .claude/epics/<epic>/<n>.md
+    git commit -m "chore: mark #<n> reviewed at ${sha:0:7}"
+
+Skipping this leaves `/pm:ship`'s review gate owing a full re-review, and
+under auto-ship the pipeline never ships at all.
+
+Then **park the dispatch marker** so fleet surfaces
 (the floor, `/pm:status`) show the task as ready-to-ship:
 
     bash ~/.claude/skills/pm/references/scripts/dispatch-marker.sh \
