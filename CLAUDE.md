@@ -247,7 +247,10 @@ the worktree yourself.
 
 First, when the final whole-implementation review passes, **record the
 review marker** — set `reviewed_sha` in the task frontmatter to the
-reviewed HEAD and commit it as its own logical unit:
+reviewed HEAD and commit it as its own logical unit. The stamp must be the
+LAST commit before parking: commit any remaining bookkeeping (the plan
+doc, cache files) BEFORE stamping, because any commit after the stamp
+makes it stale and `/pm:ship`'s review gate re-opens:
 
     sha="$(git rev-parse HEAD)"
     # set `reviewed_sha: $sha` in .claude/epics/<epic>/<n>.md frontmatter
