@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { Btn } from "@/components/ui/btn";
 import { Icon } from "@/components/ui/icon";
 import { Pill } from "@/components/ui/pill";
@@ -32,6 +33,19 @@ export function CellInspector({
   onClose: () => void;
 }) {
   const answer = cell?.status === "done" ? cell.answer : null;
+
+  // Esc dismisses the drawer — unless focus is in a text field (e.g. the column
+  // prompt editor), where Esc belongs to the field, not the drawer.
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key !== "Escape" || e.defaultPrevented) return;
+      const t = e.target;
+      if (t instanceof HTMLElement && (t.isContentEditable || t.closest("input, textarea, select"))) return;
+      onClose();
+    };
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [onClose]);
 
   return (
     <div className="flex-none border-t border-border bg-panel">
