@@ -33,6 +33,16 @@ describe("verifyCitation", () => {
   });
 });
 
+describe("verifyCitation — clipped quotes", () => {
+  it("verifies a clipped quote by its kept prefix", () => {
+    expect(verifyCitation("The term of this Agreement shall be…", "The term of this Agreement shall be three (3) years.")).toBe(true);
+  });
+
+  it("still rejects a clipped quote whose prefix is not in the document", () => {
+    expect(verifyCitation("The term of this Agreement shall be five…", "The term of this Agreement shall be three (3) years.")).toBe(false);
+  });
+});
+
 describe("derivePage", () => {
   // Trailing markers, matching real pdf-parse output: each "-- N of M --"
   // FOLLOWS the content of page N.

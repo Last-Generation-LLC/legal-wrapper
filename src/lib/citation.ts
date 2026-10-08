@@ -4,6 +4,7 @@
 
 import {
   FAILED_CITATION_CONFIDENCE_CAP,
+  TRUNCATION_MARK,
   type RawAnswer,
   type VerifiedAnswer,
   type VerifiedCitation,
@@ -14,13 +15,18 @@ export function normalizeWhitespace(s: string): string {
   return s.replace(/\s+/g, " ").trim();
 }
 
+/** Drop the clipQuote marker so a clipped quote is matched by its kept prefix. */
+function stripTruncationMark(quote: string): string {
+  return quote.endsWith(TRUNCATION_MARK) ? quote.slice(0, -TRUNCATION_MARK.length) : quote;
+}
+
 /**
  * The anti-fabrication guard (decision d1): the quote must appear verbatim in
  * the document text, compared with whitespace normalized so source line-wraps
  * don't cause false failures. Strict substring otherwise.
  */
 export function verifyCitation(quote: string, docText: string): boolean {
-  const q = normalizeWhitespace(quote);
+  const q = normalizeWhitespace(stripTruncationMark(quote));
   if (q.length === 0) return false;
   return normalizeWhitespace(docText).includes(q);
 }
@@ -45,7 +51,7 @@ const PAGE_MARKER_GLOBAL = /-- (\d+) of \d+ --/g;
  * or PDFs stored before the marker-preservation change).
  */
 export function derivePage(docText: string, quote: string): number | undefined {
-  const tokens = normalizeWhitespace(quote)
+  const tokens = normalizeWhitespace(stripTruncationMark(quote))
     .split(" ")
     .filter((t) => t.length > 0)
     .map(escapeRegExp);

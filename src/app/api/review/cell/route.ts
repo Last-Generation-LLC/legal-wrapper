@@ -7,6 +7,7 @@ import { composeReviewSystemPrompt } from "@/lib/wrapper";
 import {
   buildReviewTool,
   RawAnswerSchema,
+  clipCitationQuotes,
   REVIEW_TOOL_NAME,
 } from "@/lib/contract";
 import { verifyAnswer } from "@/lib/citation";
@@ -120,7 +121,7 @@ export async function POST(request: Request) {
     );
   }
 
-  const answer = RawAnswerSchema.safeParse(toolUse.input);
+  const answer = RawAnswerSchema.safeParse(clipCitationQuotes(toolUse.input));
   if (!answer.success) {
     const issue = answer.error.issues[0];
     // stop_reason is the load-bearing clue (review finding): a max_tokens

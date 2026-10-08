@@ -3,6 +3,10 @@ import {
   RawAnswerSchema,
   RawFooterSchema,
   MIN_QUOTE_LENGTH,
+  MAX_QUOTE_LENGTH,
+  TRUNCATION_MARK,
+  clipQuote,
+  clipCitationQuotes,
   assistantPromptStrategy,
   reviewPromptStrategy,
   FOOTER_OPEN,
@@ -115,5 +119,48 @@ describe("parseAssistantFooter", () => {
     const result = parseAssistantFooter(`Answer.\n${FOOTER_OPEN}\nnot json at all\n${FOOTER_CLOSE}`);
     expect(result.value).toBe("Answer.");
     expect(result.footer).toBeNull();
+  });
+});
+
+describe("clipQuote", () => {
+  it("leaves a quote within the limit untouched", () => {
+    expect(clipQuote("governed by the laws of Delaware")).toBe("governed by the laws of Delaware");
+  });
+
+  it("cuts an over-long quote at a word boundary, marks it, and stays within the limit", () => {
+    const long = "word ".repeat(200).trim(); // 999 chars
+    const clipped = clipQuote(long);
+    expect(clipped.length).toBeLessThanOrEqual(MAX_QUOTE_LENGTH);
+    expect(clipped.endsWith(TRUNCATION_MARK)).toBe(true);
+    // The kept text is an exact prefix of the original — clipped, never reworded.
+    const kept = clipped.slice(0, -TRUNCATION_MARK.length);
+    expect(long.startsWith(kept)).toBe(true);
+    expect(kept.endsWith("word")).toBe(true);
+  });
+});
+
+describe("clipCitationQuotes", () => {
+  it("clips over-long quotes so an otherwise-valid answer parses", () => {
+    const input = {
+      value: "Three years.",
+      citations: [{ docId: "doc_1", quote: "x ".repeat(MAX_QUOTE_LENGTH).trim() }],
+      confidence: 0.9,
+    };
+    expect(RawAnswerSchema.safeParse(input).success).toBe(false);
+    expect(RawAnswerSchema.safeParse(clipCitationQuotes(input)).success).toBe(true);
+  });
+
+  it("passes malformed input through unchanged for the schema to reject", () => {
+    expect(clipCitationQuotes(null)).toBeNull();
+    expect(clipCitationQuotes({ citations: "nope" })).toEqual({ citations: "nope" });
+  });
+});
+
+describe("parseAssistantFooter — over-long quote", () => {
+  it("keeps the footer by clipping the quote instead of dropping it", () => {
+    const quote = "liability shall be uncapped ".repeat(40).trim();
+    const text = `Answer.\n${FOOTER_OPEN}\n${JSON.stringify({ citations: [{ docId: "doc_1", quote }], confidence: 0.7 })}\n${FOOTER_CLOSE}`;
+    const result = parseAssistantFooter(text);
+    expect(result.footer?.citations[0].quote.endsWith(TRUNCATION_MARK)).toBe(true);
   });
 });
