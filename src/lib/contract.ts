@@ -8,9 +8,16 @@
 
 import * as z from "zod";
 
-/** Quote length bounds — long enough to be a real anchor, short enough to be a snippet. */
+/**
+ * Quote length bounds — long enough to be a real anchor, short enough to be a
+ * snippet. The max is roomy because legal clauses run long; anything the model
+ * sends past it is clipped (see clipQuote), never rejected or reworded.
+ */
 export const MIN_QUOTE_LENGTH = 12;
-export const MAX_QUOTE_LENGTH = 300;
+export const MAX_QUOTE_LENGTH = 600;
+
+/** Appended to a clipped quote so the reader knows the source continues. */
+export const TRUNCATION_MARK = "…";
 
 /**
  * Confidence cap applied to the WHOLE answer when any citation fails the quote
@@ -78,6 +85,40 @@ export interface VerifiedAnswer {
 /** Tool name the Review grid forces the model to call (decision d5). */
 export const REVIEW_TOOL_NAME = "submit_answer";
 
+/**
+ * Clip an over-long quote to MAX_QUOTE_LENGTH at a word boundary and mark it
+ * with TRUNCATION_MARK. The kept text is an exact prefix of what the model
+ * quoted — shortened, never paraphrased — so it still verifies against the
+ * source (citation.ts strips the mark before matching).
+ */
+export function clipQuote(quote: string): string {
+  if (quote.length <= MAX_QUOTE_LENGTH) return quote;
+  const room = quote.slice(0, MAX_QUOTE_LENGTH - TRUNCATION_MARK.length + 1);
+  const cut = room.search(/\s\S*$/); // last whitespace; drop the partial word after it
+  const kept = (cut > 0 ? room.slice(0, cut) : room.slice(0, -1)).trimEnd();
+  return kept + TRUNCATION_MARK;
+}
+
+/**
+ * Apply clipQuote to every citation in raw model output BEFORE schema
+ * validation, so one long quote no longer fails an otherwise-good answer.
+ * Anything not shaped like { citations: [...] } passes through untouched for
+ * the schema to reject as before.
+ */
+export function clipCitationQuotes(input: unknown): unknown {
+  if (typeof input !== "object" || input === null) return input;
+  const { citations } = input as { citations?: unknown };
+  if (!Array.isArray(citations)) return input;
+  return {
+    ...input,
+    citations: citations.map((c: unknown) =>
+      typeof c === "object" && c !== null && typeof (c as { quote?: unknown }).quote === "string"
+        ? { ...c, quote: clipQuote((c as { quote: string }).quote) }
+        : c,
+    ),
+  };
+}
+
 /** Delimiters bracketing the Assistant's machine-readable JSON footer (decision d5). */
 export const FOOTER_OPEN = "<<<CITATIONS_JSON>>>";
 export const FOOTER_CLOSE = "<<<END_CITATIONS_JSON>>>";
@@ -87,6 +128,7 @@ export const FOOTER_CLOSE = "<<<END_CITATIONS_JSON>>>";
 const CITATION_CORE = `# Citations and confidence
 - When documents are attached, support factual claims about them with citations drawn ONLY from the attached documents. If the documents do not address a point, say so — never invent support. When no documents are attached, answer from your general legal knowledge and leave the citations empty.
 - Every citation must include a SHORT VERBATIM QUOTE copied exactly from the document text (${MIN_QUOTE_LENGTH}-${MAX_QUOTE_LENGTH} characters), not a paraphrase. If you cannot quote it, do not cite it.
+- Quote the most relevant language: the specific words that support the answer, not the whole clause. For a long clause, quote only its operative sentence or phrase. Each quote must be one continuous passage — never splice passages together or use ellipses.
 - Identify the source document by its id (shown in each document's header), and include the section label (e.g. "§12.3") when you can.
 - The document text contains page-boundary lines of the form "-- N of M --". Never quote these lines, but use them to know which page a passage is on. Do not invent page numbers.
 - Provide a confidence value in [0,1], not your certainty that the answer is correct. When documents are attached, it means HOW WELL THE ATTACHED DOCUMENTS SUPPORT YOUR ANSWER — lower it when the documents are silent or only partially on point. When no documents are attached, it means the strength of your general legal answer — lower it when the question is jurisdiction-dependent or turns on facts you don't have.`;
@@ -144,7 +186,7 @@ export function parseAssistantFooter(text: string): ParsedAssistant {
 
   const json = text.slice(openIdx + FOOTER_OPEN.length, closeIdx).trim();
   try {
-    const parsed = RawFooterSchema.safeParse(JSON.parse(json));
+    const parsed = RawFooterSchema.safeParse(clipCitationQuotes(JSON.parse(json)));
     return { value, footer: parsed.success ? parsed.data : null };
   } catch {
     return { value, footer: null }; // malformed JSON — degrade, don't throw
