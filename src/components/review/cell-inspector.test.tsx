@@ -77,6 +77,24 @@ describe("CellInspector", () => {
     expect(onClose).toHaveBeenCalledTimes(1);
   });
 
+  it("closes on Escape", () => {
+    const onClose = vi.fn();
+    renderInspector(doneCell, { onClose });
+    fireEvent.keyDown(document, { key: "Escape" });
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it("ignores Escape while typing in a text field, and ignores other keys", () => {
+    const onClose = vi.fn();
+    renderInspector(doneCell, { onClose });
+    const input = document.createElement("input");
+    document.body.appendChild(input);
+    fireEvent.keyDown(input, { key: "Escape" });
+    fireEvent.keyDown(document, { key: "Enter" });
+    expect(onClose).not.toHaveBeenCalled();
+    input.remove();
+  });
+
   it("disables Regenerate while busy and renders the running state", () => {
     renderInspector({ status: "running" }, { busy: true });
     expect(screen.getByRole("button", { name: /Regenerate/ })).toBeDisabled();
