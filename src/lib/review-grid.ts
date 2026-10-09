@@ -91,6 +91,22 @@ export function loadColumns(storage: Pick<Storage, "getItem">): ReviewColumn[] {
   }
 }
 
+export const MODEL_STORAGE_KEY = "ll.review.model.v1";
+
+/** The stored Review model pick, if it is still on the allowlist; else the fallback. */
+export function loadModel(
+  storage: Pick<Storage, "getItem">,
+  allowed: readonly string[],
+  fallback: string,
+): string {
+  const raw = storage.getItem(MODEL_STORAGE_KEY);
+  return raw !== null && allowed.includes(raw) ? raw : fallback;
+}
+
+export function saveModel(storage: Pick<Storage, "setItem">, model: string): void {
+  storage.setItem(MODEL_STORAGE_KEY, model);
+}
+
 export function saveColumns(
   storage: Pick<Storage, "setItem">,
   columns: ReviewColumn[],
@@ -111,11 +127,19 @@ export type CellUsage = TokenUsage;
 /**
  * One cell's state. "Idle" is the absence of an entry in the map. A done cell
  * remembers the prompt it ran with so editing a column's prompt makes its
- * cells run-eligible again (locked decision).
+ * cells run-eligible again (locked decision) — and the model that answered,
+ * so switching models does the same and cost is priced per cell.
  */
 export type CellResult =
   | { status: "running" }
-  | { status: "done"; answer: VerifiedAnswer; usage: CellUsage; promptUsed: string }
+  | {
+      status: "done";
+      answer: VerifiedAnswer;
+      usage: CellUsage;
+      promptUsed: string;
+      /** Model id that produced the answer (absent only in legacy test fixtures). */
+      modelUsed?: string;
+    }
   | { status: "error"; message: string };
 
 export type CellMap = Record<string, CellResult>;
@@ -126,13 +150,21 @@ export function cellKey(docId: string, colId: string): string {
 
 /**
  * Whether "Run all" should (re-)run this cell: idle and error cells always,
- * done cells only when the column prompt changed since they ran. Done cells
- * with an unchanged prompt are never re-billed; in-flight cells are left alone.
+ * done cells only when the column prompt — or, when given, the selected model —
+ * changed since they ran. Done cells with an unchanged prompt and model are
+ * never re-billed; in-flight cells are left alone.
  */
-export function needsRun(cell: CellResult | undefined, currentPrompt: string): boolean {
+export function needsRun(
+  cell: CellResult | undefined,
+  currentPrompt: string,
+  currentModel?: string,
+): boolean {
   if (!cell) return true;
   if (cell.status === "running") return false;
   if (cell.status === "error") return true;
+  if (currentModel !== undefined && cell.modelUsed !== undefined && cell.modelUsed !== currentModel) {
+    return true;
+  }
   return cell.promptUsed !== currentPrompt;
 }
 
@@ -170,16 +202,20 @@ export function cellCitationLabel(answer: VerifiedAnswer): string | null {
 }
 
 /** What a single cell call resolves to — the cell route's success body. */
-export type CellResponse = { answer: VerifiedAnswer; usage: CellUsage };
+export type CellResponse = { answer: VerifiedAnswer; usage: CellUsage; model?: string };
 
 export type RunCellFn = (docId: string, prompt: string) => Promise<CellResponse>;
 
 /** POST one cell to the API; non-OK responses throw with the route's message. */
-export async function fetchCell(docId: string, prompt: string): Promise<CellResponse> {
+export async function fetchCell(
+  docId: string,
+  prompt: string,
+  model?: string,
+): Promise<CellResponse> {
   const res = await fetch("/api/review/cell", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ docId, prompt }),
+    body: JSON.stringify(model ? { docId, prompt, model } : { docId, prompt }),
   });
   const body = await res.json().catch(() => null);
   if (!res.ok) {
@@ -230,8 +266,10 @@ export async function runGrid(options: {
   runCell: RunCellFn;
   onUpdate: (docId: string, colId: string, result: CellResult) => void;
   concurrency?: number;
+  /** The selected model: done cells answered by a different model re-run. */
+  model?: string;
 }): Promise<void> {
-  const { docIds, columns, cells, runCell, onUpdate } = options;
+  const { docIds, columns, cells, runCell, onUpdate, model } = options;
   const semaphore = new Semaphore(options.concurrency ?? RUN_CONCURRENCY);
 
   // Resolves to null on success, or the error message on failure (the warm
@@ -241,8 +279,8 @@ export async function runGrid(options: {
     semaphore.run(async () => {
       onUpdate(docId, col.id, { status: "running" });
       try {
-        const { answer, usage } = await runCell(docId, col.prompt);
-        onUpdate(docId, col.id, { status: "done", answer, usage, promptUsed: col.prompt });
+        const { answer, usage, model } = await runCell(docId, col.prompt);
+        onUpdate(docId, col.id, { status: "done", answer, usage, promptUsed: col.prompt, modelUsed: model });
         return null;
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
@@ -253,7 +291,7 @@ export async function runGrid(options: {
 
   await Promise.all(
     docIds.map(async (docId) => {
-      const queue = columns.filter((col) => needsRun(cells[cellKey(docId, col.id)], col.prompt));
+      const queue = columns.filter((col) => needsRun(cells[cellKey(docId, col.id)], col.prompt, model));
       if (queue.length === 0) return;
 
       const [warm, ...rest] = queue;
@@ -289,8 +327,8 @@ export async function regenerateCell(options: {
   const { docId, col, runCell, onUpdate } = options;
   onUpdate(docId, col.id, { status: "running" });
   try {
-    const { answer, usage } = await runCell(docId, col.prompt);
-    onUpdate(docId, col.id, { status: "done", answer, usage, promptUsed: col.prompt });
+    const { answer, usage, model } = await runCell(docId, col.prompt);
+    onUpdate(docId, col.id, { status: "done", answer, usage, promptUsed: col.prompt, modelUsed: model });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     onUpdate(docId, col.id, { status: "error", message });

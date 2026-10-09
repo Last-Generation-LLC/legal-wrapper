@@ -54,6 +54,29 @@ export function modelFor(role: ModelRole): string {
 }
 
 /**
+ * The models the user may pick for Review grid cells (verified against live
+ * Anthropic docs + a live tool_choice probe, 2026-10). The server only accepts
+ * ids on this list, so a stale or hand-edited browser value can't reach the API.
+ * MODELS.review stays the default.
+ */
+export const REVIEW_MODEL_IDS = [
+  "claude-sonnet-4-6",
+  "claude-sonnet-5-5",
+  "claude-haiku-5-5",
+] as const;
+export type ReviewModelId = (typeof REVIEW_MODEL_IDS)[number];
+
+// Newer models return a 400 for a FORCED tool_choice ({type: "tool"}); the
+// Review route falls back to tool_choice "auto" + the system-prompt
+// instruction to call submit_answer for these.
+const REJECTS_FORCED_TOOL_CHOICE = new Set<string>(["claude-sonnet-5-5"]);
+
+/** Whether a model accepts tool_choice {type: "tool"} (forced structured output). */
+export function supportsForcedToolChoice(modelId: string): boolean {
+  return !REJECTS_FORCED_TOOL_CHOICE.has(modelId);
+}
+
+/**
  * The model the context meter is measured against. Token counts are
  * model-specific; documents go to the Opus-tier Assistant, so we count against
  * it. Derived from the registry so there is exactly one source of truth.

@@ -27,7 +27,14 @@ export type TokenUsage = {
 export const CACHE_WRITE_5MIN_MULTIPLIER = 1.25;
 export const CACHE_READ_MULTIPLIER = 0.1;
 
-export type ModelPricing = { inputPerMTok: number; outputPerMTok: number };
+export type ModelPricing = {
+  inputPerMTok: number;
+  outputPerMTok: number;
+  /** A second rate card for long prompts (Haiku 5.5: prompts over 100K tokens
+   *  bill every token at the higher rates). Prompt size = all input tokens,
+   *  cached or not. */
+  longPrompt?: { overInputTokens: number; inputPerMTok: number; outputPerMTok: number };
+};
 
 /**
  * Per-model rates in USD per million tokens. Keyed by the exact model id the
@@ -38,6 +45,12 @@ export type ModelPricing = { inputPerMTok: number; outputPerMTok: number };
 export const MODEL_PRICING: Record<string, ModelPricing> = {
   "claude-opus-4-8": { inputPerMTok: 5, outputPerMTok: 25 },
   "claude-sonnet-4-6": { inputPerMTok: 3, outputPerMTok: 15 },
+  "claude-sonnet-5-5": { inputPerMTok: 2, outputPerMTok: 10 }, // verified 2026-10
+  "claude-haiku-5-5": {
+    inputPerMTok: 0.1,
+    outputPerMTok: 0.5,
+    longPrompt: { overInputTokens: 100_000, inputPerMTok: 0.5, outputPerMTok: 2.5 },
+  }, // verified 2026-10
 };
 
 /** Dollar cost of one usage record for a given model id. Unknown model → 0
@@ -45,8 +58,11 @@ export const MODEL_PRICING: Record<string, ModelPricing> = {
 export function usageCostUsd(usage: TokenUsage, modelId: string): number {
   const p = MODEL_PRICING[modelId];
   if (!p) return 0;
-  const inRate = p.inputPerMTok / 1_000_000;
-  const outRate = p.outputPerMTok / 1_000_000;
+  const promptTokens =
+    usage.uncachedInputTokens + usage.cacheReadInputTokens + usage.cacheWriteInputTokens;
+  const card = p.longPrompt && promptTokens > p.longPrompt.overInputTokens ? p.longPrompt : p;
+  const inRate = card.inputPerMTok / 1_000_000;
+  const outRate = card.outputPerMTok / 1_000_000;
   return (
     usage.uncachedInputTokens * inRate +
     usage.cacheReadInputTokens * inRate * CACHE_READ_MULTIPLIER +
@@ -99,6 +115,14 @@ export function formatUsd(dollars: number): string {
 export function formatUsageCost(usage: TokenUsage, modelId: string): string | undefined {
   if (!MODEL_PRICING[modelId]) return undefined;
   return formatUsd(usageCostUsd(usage, modelId));
+}
+
+/** "$3 / $15" — a model's base input/output rate per million tokens, for pickers. */
+export function formatRateCard(modelId: string): string | undefined {
+  const p = MODEL_PRICING[modelId];
+  if (!p) return undefined;
+  const fmt = (n: number) => `$${n < 1 ? n.toFixed(2) : n}`;
+  return `${fmt(p.inputPerMTok)} / ${fmt(p.outputPerMTok)}`;
 }
 
 /** "88%" — whole-percent cache-hit label. */

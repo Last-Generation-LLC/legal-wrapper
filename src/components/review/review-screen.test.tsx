@@ -42,7 +42,13 @@ function renderScreen(documents: DocumentMeta[], selected: string[] = []) {
   return render(
     <DocsProvider documents={documents}>
       <SelectDocs ids={selected} />
-      <ReviewScreen modelLabel="SONNET 4.6" modelId="claude-sonnet-4-6" />
+      <ReviewScreen
+        modelOptions={[
+          { id: "claude-sonnet-4-6", label: "SONNET 4.6" },
+          { id: "claude-haiku-5-5", label: "HAIKU 5.5" },
+        ]}
+        defaultModelId="claude-sonnet-4-6"
+      />
     </DocsProvider>,
   );
 }

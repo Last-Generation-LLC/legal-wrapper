@@ -7,6 +7,8 @@ import {
   fetchCell,
   gridCounts,
   loadColumns,
+  loadModel,
+  MODEL_STORAGE_KEY,
   needsRun,
   newColumn,
   regenerateCell,
@@ -378,5 +380,48 @@ describe("regenerateCell", () => {
       "c1",
       { status: "error", message: "Rate limited by the model API — retry shortly." },
     ]);
+  });
+});
+
+describe("model pick", () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("needsRun re-runs a done cell answered by a different model, not the same one", () => {
+    const cell: CellResult = { ...doneCell("p"), modelUsed: "claude-sonnet-4-6" } as CellResult;
+    expect(needsRun(cell, "p", "claude-sonnet-4-6")).toBe(false);
+    expect(needsRun(cell, "p", "claude-haiku-5-5")).toBe(true);
+    expect(needsRun(cell, "p")).toBe(false); // no model given → prompt-only semantics
+  });
+
+  it("loadModel returns a stored pick only if it is still allowed", () => {
+    const store = (v: string | null) => ({ getItem: (k: string) => (k === MODEL_STORAGE_KEY ? v : null) });
+    const allowed = ["claude-sonnet-4-6", "claude-haiku-5-5"];
+    expect(loadModel(store("claude-haiku-5-5"), allowed, "claude-sonnet-4-6")).toBe("claude-haiku-5-5");
+    expect(loadModel(store("claude-retired-1"), allowed, "claude-sonnet-4-6")).toBe("claude-sonnet-4-6");
+    expect(loadModel(store(null), allowed, "claude-sonnet-4-6")).toBe("claude-sonnet-4-6");
+  });
+
+  it("fetchCell sends the model when given", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(Response.json({ answer: answerOf("x"), usage })));
+    await fetchCell("d1", "p", "claude-haiku-5-5");
+    expect(JSON.parse((vi.mocked(fetch).mock.calls[0][1] as RequestInit).body as string)).toEqual({
+      docId: "d1",
+      prompt: "p",
+      model: "claude-haiku-5-5",
+    });
+  });
+
+  it("runGrid records which model answered each cell", async () => {
+    const updates: CellResult[] = [];
+    await runGrid({
+      docIds: ["d1"],
+      columns: [{ id: "c1", title: "t", prompt: "p", width: 100 }],
+      cells: {},
+      runCell: async () => ({ answer: answerOf("v"), usage, model: "claude-haiku-5-5" }),
+      onUpdate: (_d, _c, r) => updates.push(r),
+      model: "claude-haiku-5-5",
+    });
+    const done = updates.at(-1);
+    expect(done?.status === "done" && done.modelUsed).toBe("claude-haiku-5-5");
   });
 });

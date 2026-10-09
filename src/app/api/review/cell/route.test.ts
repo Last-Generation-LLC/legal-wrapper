@@ -190,6 +190,26 @@ describe("POST /api/review/cell — the call", () => {
     expect(call.tools[0].name).toBe(REVIEW_TOOL_NAME);
   });
 
+  it("uses the picked model and reports it back", async () => {
+    const create = scriptToolUse(GOOD_ANSWER);
+    const res = await POST(request(validBody({ model: "claude-haiku-5-5" })));
+    expect(create.mock.calls[0][0].model).toBe("claude-haiku-5-5");
+    expect((await res.json()).model).toBe("claude-haiku-5-5");
+  });
+
+  it("falls back to tool_choice auto for a model that rejects forcing (Sonnet 5.5)", async () => {
+    const create = scriptToolUse(GOOD_ANSWER);
+    await POST(request(validBody({ model: "claude-sonnet-5-5" })));
+    expect(create.mock.calls[0][0].tool_choice).toEqual({ type: "auto", disable_parallel_tool_use: true });
+  });
+
+  it("400 for a model that is not on the allowlist — before any model call", async () => {
+    const create = scriptToolUse(GOOD_ANSWER);
+    const res = await POST(request(validBody({ model: "claude-opus-4-8" })));
+    expect(res.status).toBe(400);
+    expect(create).not.toHaveBeenCalled();
+  });
+
   it("honors a custom systemPromptTemplate (transparency parity)", async () => {
     const create = scriptToolUse(GOOD_ANSWER);
     await POST(

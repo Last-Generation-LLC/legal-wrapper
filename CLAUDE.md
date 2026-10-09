@@ -27,7 +27,7 @@ This project makes the opposite choices on purpose:
 - **Narrow workflows**, each with a tuned system prompt.
 - **Transparent prompts** — the user can see and edit the system prompt.
 - **Single-shot preferred** over agentic chains; one well-scoped call beats four "smart" ones.
-- **Opus for the Assistant, Sonnet for grid cells** — don't cost-optimize reliability into the floor.
+- **Opus for the Assistant; grid cells default to Sonnet, with a visible model picker** — cheaper models are the user's informed, per-run choice (prices shown), never a silent downgrade. Don't cost-optimize reliability into the floor.
 
 These are not optimizations. They are the product.
 

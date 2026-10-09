@@ -1,7 +1,12 @@
 import { z } from "zod";
 import Anthropic from "@anthropic-ai/sdk";
 import { prisma } from "@/lib/prisma";
-import { getAnthropic, modelFor } from "@/lib/anthropic";
+import {
+  getAnthropic,
+  modelFor,
+  REVIEW_MODEL_IDS,
+  supportsForcedToolChoice,
+} from "@/lib/anthropic";
 import { CONTEXT_CEILING, docOverCeilingMessage } from "@/lib/context-ceiling";
 import { composeReviewSystemPrompt } from "@/lib/wrapper";
 import {
@@ -26,6 +31,8 @@ const BodySchema = z.object({
   docId: z.string().min(1),
   prompt: z.string().min(1),
   systemPromptTemplate: z.string().min(1).optional(),
+  /** The user's Review model pick; must be on the allowlist. Omitted → default. */
+  model: z.enum(REVIEW_MODEL_IDS).optional(),
 });
 
 function error(message: string, status: number) {
@@ -49,6 +56,7 @@ export async function POST(request: Request) {
     );
   }
   const { docId, prompt, systemPromptTemplate } = parsed.data;
+  const model = parsed.data.model ?? modelFor("review");
 
   const doc = await prisma.document.findUnique({ where: { id: docId } });
   if (!doc) return error(`Unknown document id: ${docId}.`, 404);
@@ -74,7 +82,7 @@ export async function POST(request: Request) {
   let message: Anthropic.Message;
   try {
     message = await getAnthropic().messages.create({
-      model: modelFor("review"),
+      model,
       max_tokens: MAX_OUTPUT_TOKENS,
       system: [
         { type: "text", text: system, cache_control: { type: "ephemeral" } },
@@ -83,11 +91,12 @@ export async function POST(request: Request) {
       tools: [buildReviewTool() as Anthropic.Tool],
       // Forced structured output (decision d5): the model MUST answer by
       // calling submit_answer — no prose path to parse, no agentic loop.
-      tool_choice: {
-        type: "tool",
-        name: REVIEW_TOOL_NAME,
-        disable_parallel_tool_use: true,
-      },
+      // Models that reject forcing get "auto"; the system prompt's strategy
+      // already instructs the submit_answer call, and a response without one
+      // still fails loudly below (502 naming the stop_reason).
+      tool_choice: supportsForcedToolChoice(model)
+        ? { type: "tool", name: REVIEW_TOOL_NAME, disable_parallel_tool_use: true }
+        : { type: "auto", disable_parallel_tool_use: true },
     });
   } catch (err) {
     if (err instanceof Anthropic.APIError) {
@@ -145,6 +154,7 @@ export async function POST(request: Request) {
   // cache fields, which the pricing module bills at their own multipliers.
   return Response.json({
     answer: verified,
+    model,
     usage: {
       uncachedInputTokens: message.usage.input_tokens,
       cacheReadInputTokens: message.usage.cache_read_input_tokens ?? 0,

@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   cacheHitRate,
   formatCachePct,
+  formatRateCard,
   formatUsageCost,
   formatUsd,
   sumUsage,
@@ -100,5 +101,29 @@ describe("formatCachePct", () => {
   it("rounds to a whole percent", () => {
     expect(formatCachePct(0.876)).toBe("88%");
     expect(formatCachePct(0)).toBe("0%");
+  });
+});
+
+describe("Review picker models", () => {
+  const call = (input: number, output: number): TokenUsage => ({ ...zero, uncachedInputTokens: input, outputTokens: output });
+
+  it("prices Sonnet 5.5 at $2 / $10", () => {
+    expect(usageCostUsd(call(1_000_000, 1_000_000), "claude-sonnet-5-5")).toBeCloseTo(12);
+  });
+
+  it("prices Haiku 5.5 at $0.10 / $0.50 up to 100K prompt tokens", () => {
+    expect(usageCostUsd(call(100_000, 1_000), "claude-haiku-5-5")).toBeCloseTo(0.01 + 0.0005);
+  });
+
+  it("switches Haiku 5.5 to its long-prompt card ($0.50 / $2.50) above 100K, counting cached tokens", () => {
+    const long: TokenUsage = { ...zero, cacheReadInputTokens: 100_001, outputTokens: 1_000 };
+    // cache read = 0.1x the LONG input rate; output at the long rate
+    expect(usageCostUsd(long, "claude-haiku-5-5")).toBeCloseTo(100_001 * 0.5e-6 * 0.1 + 1_000 * 2.5e-6);
+  });
+
+  it("formats a rate card for the picker", () => {
+    expect(formatRateCard("claude-sonnet-4-6")).toBe("$3 / $15");
+    expect(formatRateCard("claude-haiku-5-5")).toBe("$0.10 / $0.50");
+    expect(formatRateCard("unknown")).toBeUndefined();
   });
 });

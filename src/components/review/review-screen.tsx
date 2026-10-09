@@ -5,7 +5,6 @@ import { TopBar } from "@/components/layout/top-bar";
 import { Btn } from "@/components/ui/btn";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Icon } from "@/components/ui/icon";
-import { Pill } from "@/components/ui/pill";
 import { useDocs } from "@/components/documents/docs-context";
 import { docFormat, docLabel, formatTokens } from "@/lib/doc-display";
 import {
@@ -13,17 +12,27 @@ import {
   fetchCell,
   gridCounts,
   loadColumns,
+  loadModel,
   newColumn,
   regenerateCell,
   runGrid,
   saveColumns,
+  saveModel,
   STARTER_COLUMNS,
   type CellMap,
   type CellResult,
   type ReviewColumn,
 } from "@/lib/review-grid";
 import { csvFilename, downloadCsv, gridToCsv } from "@/lib/review-csv";
-import { cacheHitRate, formatCachePct, formatUsageCost, sumUsage, type TokenUsage } from "@/lib/pricing";
+import {
+  cacheHitRate,
+  formatCachePct,
+  formatUsd,
+  MODEL_PRICING,
+  sumUsage,
+  usageCostUsd,
+  type TokenUsage,
+} from "@/lib/pricing";
 import { CellInspector } from "./cell-inspector";
 import { ColumnHeader } from "./column-header";
 import { GridCell } from "./grid-cell";
@@ -31,10 +40,19 @@ import { StatusBar } from "./status-bar";
 
 const DOC_COL_WIDTH = 240;
 
+/** One choice in the Review model picker (built server-side from the registry). */
+export type ReviewModelOption = { id: string; label: string; rates?: string };
+
 // The Review screen's single stateful entry — children are presentational.
-// Rows are the shared sidebar selection (locked decision); columns persist to
-// localStorage; cell results are in-memory and reset on reload.
-export function ReviewScreen({ modelLabel, modelId }: { modelLabel: string; modelId: string }) {
+// Rows are the shared sidebar selection (locked decision); columns and the
+// model pick persist to localStorage; cell results are in-memory and reset on reload.
+export function ReviewScreen({
+  modelOptions,
+  defaultModelId,
+}: {
+  modelOptions: ReviewModelOption[];
+  defaultModelId: string;
+}) {
   const { documents, selectedIds } = useDocs();
   const docs = documents.filter((d) => selectedIds.includes(d.id));
   const docIds = docs.map((d) => d.id);
@@ -48,11 +66,21 @@ export function ReviewScreen({ modelLabel, modelId }: { modelLabel: string; mode
   const [running, setRunning] = useState(false);
   const [editingColId, setEditingColId] = useState<string | null>(null);
   const [selected, setSelected] = useState<{ docId: string; colId: string } | null>(null);
+  const [modelId, setModelId] = useState(defaultModelId);
 
   useEffect(() => {
     setColumns(loadColumns(window.localStorage));
+    setModelId(loadModel(window.localStorage, modelOptions.map((o) => o.id), defaultModelId));
     setColumnsLoaded(true);
-  }, []);
+  }, [modelOptions, defaultModelId]);
+
+  function changeModel(next: string) {
+    setModelId(next);
+    saveModel(window.localStorage, next);
+  }
+
+  // Every call in this screen goes to the picked model.
+  const runCell = (docId: string, prompt: string) => fetchCell(docId, prompt, modelId);
 
   useEffect(() => {
     if (columnsLoaded) saveColumns(window.localStorage, columns);
@@ -85,8 +113,9 @@ export function ReviewScreen({ modelLabel, modelId }: { modelLabel: string; mode
         docIds,
         columns,
         cells,
-        runCell: fetchCell,
+        runCell,
         onUpdate: setCell,
+        model: modelId,
       });
     } finally {
       setRunning(false);
@@ -97,7 +126,7 @@ export function ReviewScreen({ modelLabel, modelId }: { modelLabel: string; mode
     if (!effectiveSelected || running) return;
     const col = columns.find((c) => c.id === effectiveSelected.colId);
     if (!col) return;
-    await regenerateCell({ docId: effectiveSelected.docId, col, runCell: fetchCell, onUpdate: setCell });
+    await regenerateCell({ docId: effectiveSelected.docId, col, runCell, onUpdate: setCell });
   }
 
   // Exports the grid AS IT IS — running/idle cells come out empty, error
@@ -125,13 +154,19 @@ export function ReviewScreen({ modelLabel, modelId }: { modelLabel: string; mode
 
   // Per-run cost/cache: every done cell's real usage, summed. Idle/running/error
   // cells contribute nothing. Undefined figures hide the pills until something runs.
-  const doneUsages: TokenUsage[] = Object.values(cells)
-    .filter((c): c is Extract<CellResult, { status: "done" }> => c.status === "done")
-    .map((c) => c.usage);
+  const doneCells = Object.values(cells).filter(
+    (c): c is Extract<CellResult, { status: "done" }> => c.status === "done",
+  );
+  const doneUsages: TokenUsage[] = doneCells.map((c) => c.usage);
   const runUsage = doneUsages.length > 0 ? sumUsage(doneUsages) : null;
-  // formatUsageCost returns undefined for an unpriced model, so the pill hides
-  // rather than showing a misleading $0.00 (both figures move together).
-  const runCost = runUsage ? formatUsageCost(runUsage, modelId) : undefined;
+  // Cost is priced PER CELL with the model that answered it (a grid can mix
+  // models, and Haiku 5.5's rate depends on each call's prompt size). Any
+  // unpriced cell hides the pill rather than showing a misleadingly low total.
+  const allPriced = doneCells.every((c) => MODEL_PRICING[c.modelUsed ?? modelId]);
+  const runCost =
+    runUsage && allPriced
+      ? formatUsd(doneCells.reduce((sum, c) => sum + usageCostUsd(c.usage, c.modelUsed ?? modelId), 0))
+      : undefined;
   const runCachePct = runUsage ? formatCachePct(cacheHitRate(runUsage)) : undefined;
 
   const canRun = !running && docIds.length > 0 && columns.length > 0;
@@ -146,7 +181,21 @@ export function ReviewScreen({ modelLabel, modelId }: { modelLabel: string; mode
         crumbs={["~/workspaces", "Review"]}
         right={
           <div className="flex items-center gap-2">
-            <Pill tone="active">● {modelLabel}</Pill>
+            <select
+              aria-label="Review model"
+              title="Model for Review cells — price per million tokens, input / output"
+              value={modelId}
+              disabled={running}
+              onChange={(e) => changeModel(e.target.value)}
+              className="cursor-pointer rounded-[3px] border border-[oklch(0.5_0.08_78_/_0.4)] bg-[oklch(0.28_0.05_78_/_0.15)] px-2 py-0.5 font-mono text-[10.5px] font-medium leading-4 tracking-[0.02em] text-amber disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {modelOptions.map((o) => (
+                <option key={o.id} value={o.id}>
+                  ● {o.label}
+                  {o.rates ? ` · ${o.rates}` : ""}
+                </option>
+              ))}
+            </select>
             <div className="mx-1 h-[18px] w-px bg-border" />
             <Btn
               variant="ghost"
