@@ -21,7 +21,8 @@ import {
 import { ContextStrip } from "./context-strip";
 import { MessageThread } from "./message-thread";
 import { Composer } from "./composer";
-import { PromptPanel } from "./prompt-panel";
+import { TemplateEditor } from "./template-editor";
+import type { PromptTemplate } from "@/lib/prompt-templates";
 import { SessionPanel, type SessionAction } from "./session-panel";
 import type { ActiveThread } from "@/lib/chat-store";
 
@@ -36,8 +37,10 @@ export function AssistantChat({
   modelId,
   initialMessages,
   initialSessionId,
+  initialTemplates = [],
 }: {
   initialSessionId: string;
+  initialTemplates?: PromptTemplate[];
   modelLabel: string;
   modelId: string;
   /** The persisted active thread (#22) — seeded into useChat on mount. */
@@ -61,6 +64,7 @@ export function AssistantChat({
   // (a setting, not a message), resets on reload. What the panel shows is what
   // the next call sends — except blank, which falls back to the default.
   const [template, setTemplate] = useState(DEFAULT_SYSTEM_PROMPT);
+  const [templateLabel, setTemplateLabel] = useState("General legal");
   const [showPrompt, setShowPrompt] = useState(false);
 
   const { messages, status, error, sendMessage, regenerate, clearError, stop } =
@@ -179,8 +183,8 @@ export function AssistantChat({
         right={
           <div className="flex items-center gap-2">
             <Pill tone="active">● {modelLabel}</Pill>
-            <Btn variant="ghost" size="sm" icon="eye" onClick={() => setShowPrompt((s) => !s)}>
-              {showPrompt ? "Hide" : "Show"} prompt
+            <Btn variant="ghost" size="sm" icon="eye" aria-expanded={showPrompt} aria-controls="assistant-prompt" onClick={() => setShowPrompt((s) => !s)}>
+              {showPrompt ? "Hide" : "Show"} prompt · <span className="max-w-32 truncate" title={templateLabel}>{templateLabel}</span>
             </Btn>
             <Btn variant="ghost" size="sm" aria-expanded={showSessions} aria-controls="assistant-sessions" onClick={() => setShowSessions((s) => !s)}>
               Sessions
@@ -195,13 +199,15 @@ export function AssistantChat({
       {sessionError && <p role="alert" className="px-4 py-2 text-xs text-red">{sessionError}</p>}
       {showSessions && <SessionPanel currentId={sessionId} busy={changingSession || uploading} revision={sessionRevision} onAction={handleSessionAction} />}
       <ContextStrip docs={selectedDocs} cost={stripCost} cacheHit={stripCacheHit} />
-      {showPrompt && (
-        <PromptPanel
+      <div id="assistant-prompt" hidden={!showPrompt} className="max-h-[55vh] shrink-0 overflow-y-auto">
+        <TemplateEditor
+          initialTemplates={initialTemplates}
           value={template}
           onChange={setTemplate}
-          onReset={() => setTemplate(DEFAULT_SYSTEM_PROMPT)}
+          onLabelChange={setTemplateLabel}
+          disabled={busy || changingSession}
         />
-      )}
+      </div>
       <MessageThread
         messages={messages}
         status={status}

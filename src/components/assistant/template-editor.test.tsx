@@ -1,0 +1,138 @@
+// @vitest-environment jsdom
+import { useState } from "react";
+import { afterEach, beforeEach, expect, it, vi } from "vitest";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { TemplateEditor } from "./template-editor";
+import { CONTRACT_REVIEW_SYSTEM_PROMPT, DEFAULT_SYSTEM_PROMPT } from "@/lib/wrapper";
+import type { PromptTemplate } from "@/lib/prompt-templates";
+const saved = { id: "t1", name: "My template", content: "Saved {{DOCUMENTS}}" };
+const fetchMock = vi.fn();
+function Harness({ initial = [saved], disabled = false }: { initial?: PromptTemplate[]; disabled?: boolean }) {
+  const [value, setValue] = useState(DEFAULT_SYSTEM_PROMPT);
+  const [label, setLabel] = useState("General legal");
+  return <><output aria-label="Active template">{label}</output><TemplateEditor initialTemplates={initial} value={value} onChange={setValue} onLabelChange={setLabel} disabled={disabled} /></>;
+}
+const select = (id: string) => fireEvent.change(screen.getByRole("combobox"), { target: { value: id } });
+const edit = (text: string) => fireEvent.change(screen.getByLabelText("System prompt template"), { target: { value: text } });
+beforeEach(() => { fetchMock.mockReset(); vi.stubGlobal("fetch", fetchMock); });
+afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
+it("switches verbatim built-ins and restores the selected preset on Reset", () => {
+  render(<Harness />);
+  select("builtin:contract");
+  expect(screen.getByLabelText("System prompt template")).toHaveValue(CONTRACT_REVIEW_SYSTEM_PROMPT);
+  expect(screen.getByLabelText("Active template")).toHaveTextContent("Contract review");
+  expect(screen.queryByRole("button", { name: "Delete" })).not.toBeInTheDocument();
+  edit("Changed");
+  fireEvent.click(screen.getByRole("button", { name: "Reset" }));
+  expect(screen.getByLabelText("System prompt template")).toHaveValue(CONTRACT_REVIEW_SYSTEM_PROMPT);
+});
+it("requires confirmation before switching away from edits and supports cancellation", () => {
+  render(<Harness />);
+  edit("Keep {{DOCUMENTS}}");
+  select("t1");
+  expect(screen.getByLabelText("System prompt template")).toHaveValue("Keep {{DOCUMENTS}}");
+  fireEvent.click(screen.getByRole("button", { name: "Keep editing" }));
+  expect(screen.getByRole("combobox")).toHaveValue("builtin:general");
+  select("t1");
+  fireEvent.click(screen.getByRole("button", { name: "Discard edits and switch" }));
+  expect(screen.getByLabelText("System prompt template")).toHaveValue(saved.content);
+});
+it("saves exact edits as a new named template and seeds them on remount", async () => {
+  const content = "  Draft {{DOCUMENTS}}\n";
+  const created = { id: "new", name: "New template", content };
+  fetchMock.mockResolvedValue(Response.json({ template: created }));
+  const view = render(<Harness />);
+  edit(content);
+  fireEvent.click(screen.getByRole("button", { name: "Save as new" }));
+  fireEvent.change(screen.getByLabelText("Template name"), { target: { value: " New template " } });
+  fireEvent.click(screen.getByRole("button", { name: "Save template" }));
+  await screen.findByText("Template saved.");
+  expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toEqual({ action: "create", name: "New template", content });
+  expect(screen.getByRole("combobox")).toHaveValue("new");
+  expect(screen.queryByText("Unsaved edits")).not.toBeInTheDocument();
+  view.unmount();
+  render(<Harness initial={[created]} />);
+  expect(screen.getByRole("combobox")).toHaveValue("builtin:general");
+  select("new");
+  expect(screen.getByLabelText("System prompt template")).toHaveValue(content);
+});
+it("updates saved content and preserves unsaved content during a rename", async () => {
+  render(<Harness />);
+  select("t1");
+  edit("Updated {{DOCUMENTS}}");
+  fetchMock.mockResolvedValueOnce(Response.json({ template: { ...saved, content: "Updated {{DOCUMENTS}}" } }));
+  fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
+  await screen.findByText("Template saved.");
+  edit("Unsaved {{DOCUMENTS}}");
+  fetchMock.mockResolvedValueOnce(Response.json({ template: { ...saved, name: "Renamed", content: "Updated {{DOCUMENTS}}" } }));
+  fireEvent.click(screen.getByRole("button", { name: "Rename" }));
+  fireEvent.change(screen.getByLabelText("Template name"), { target: { value: "Renamed" } });
+  fireEvent.click(screen.getByRole("button", { name: "Save name" }));
+  await screen.findByText("Template renamed.");
+  expect(screen.getByLabelText("System prompt template")).toHaveValue("Unsaved {{DOCUMENTS}}");
+  expect(screen.getByLabelText("Active template")).toHaveTextContent("Renamed");
+  fireEvent.click(screen.getByRole("button", { name: "Reset" }));
+  expect(screen.getByLabelText("System prompt template")).toHaveValue("Updated {{DOCUMENTS}}");
+});
+it("keeps the prompt after failed writes and permits retry", async () => {
+  render(<Harness />);
+  select("t1");
+  edit("Keep {{DOCUMENTS}}");
+  fetchMock.mockResolvedValueOnce(Response.json({ error: "Save a copy to recover." }, { status: 404 }));
+  fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
+  expect(await screen.findByRole("alert")).toHaveTextContent("Save a copy");
+  expect(screen.getByLabelText("System prompt template")).toHaveValue("Keep {{DOCUMENTS}}");
+  expect(screen.getByRole("combobox")).toHaveValue("t1");
+  fetchMock.mockResolvedValueOnce(Response.json({ template: { ...saved, content: "Keep {{DOCUMENTS}}" } }));
+  fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
+  await screen.findByText("Template saved.");
+  expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+});
+it("confirms deletion, cancels safely, and falls back only after success", async () => {
+  render(<Harness />);
+  select("t1");
+  edit("Unsaved {{DOCUMENTS}}");
+  fireEvent.click(screen.getByRole("button", { name: "Delete" }));
+  expect(screen.getByRole("alert")).toHaveTextContent("discarding your unsaved edits");
+  fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+  expect(fetchMock).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByRole("button", { name: "Delete" }));
+  fetchMock.mockResolvedValueOnce(Response.json({ template: null }));
+  fireEvent.click(screen.getByRole("button", { name: "Delete template" }));
+  await screen.findByText("Template deleted. General legal is selected.");
+  expect(screen.getByRole("combobox")).toHaveValue("builtin:general");
+  expect(screen.queryByRole("option", { name: saved.name })).not.toBeInTheDocument();
+  expect(screen.getByLabelText("System prompt template")).toHaveValue(DEFAULT_SYSTEM_PROMPT);
+});
+it("serializes saves and disables editing while they are pending", async () => {
+  let resolve!: (response: Response) => void;
+  fetchMock.mockImplementation(() => new Promise<Response>((r) => { resolve = r; }));
+  render(<Harness />);
+  select("t1");
+  edit("New {{DOCUMENTS}}");
+  const button = screen.getByRole("button", { name: "Save changes" });
+  fireEvent.click(button);
+  fireEvent.click(button);
+  expect(fetchMock).toHaveBeenCalledTimes(1);
+  expect(screen.getByLabelText("System prompt template")).toBeDisabled();
+  expect(screen.getByRole("combobox")).toBeDisabled();
+  resolve(Response.json({ template: { ...saved, content: "New {{DOCUMENTS}}" } }));
+  await waitFor(() => expect(screen.getByLabelText("System prompt template")).not.toBeDisabled());
+});
+it("rejects blank prompts and blank names before sending", () => {
+  render(<Harness />);
+  edit("  ");
+  expect(screen.getByRole("button", { name: "Save as new" })).toBeDisabled();
+  edit("Content");
+  fireEvent.click(screen.getByRole("button", { name: "Save as new" }));
+  fireEvent.change(screen.getByLabelText("Template name"), { target: { value: "  " } });
+  expect(screen.getByRole("button", { name: "Save template" })).toBeDisabled();
+  expect(fetchMock).not.toHaveBeenCalled();
+});
+it("locks template changes during chat or session activity", () => {
+  render(<Harness disabled />);
+  expect(screen.getByRole("combobox")).toBeDisabled();
+  expect(screen.getByLabelText("System prompt template")).toBeDisabled();
+  expect(screen.getByRole("button", { name: "Save as new" })).toBeDisabled();
+  expect(screen.getByRole("button", { name: "Reset" })).toBeDisabled();
+});

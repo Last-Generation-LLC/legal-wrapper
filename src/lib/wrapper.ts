@@ -12,8 +12,8 @@ export const DOCUMENTS_TOKEN = "{{DOCUMENTS}}";
  * The shipped default system prompt (issue #23) — a single ADAPTIVE prompt that
  * works whether or not documents are attached: it answers general legal
  * questions from the model's own knowledge and grounds claims in documents when
- * they're present. One editable template (the transparency thesis), no
- * mode-switching logic. The trailing `{{DOCUMENTS}}` is filled per call — with
+ * they're present. The editable General legal preset (the transparency thesis).
+ * The trailing `{{DOCUMENTS}}` is filled per call — with
  * the `NO_DOCUMENTS_SENTINEL` when nothing is selected, so the model
  * unambiguously sees the no-doc mode.
  */
@@ -36,9 +36,8 @@ ${DOCUMENTS_TOKEN}`;
 
 /**
  * The original contract-review default prompt (pre-#23), preserved verbatim as a
- * named archive — NOT dead code. It becomes the first entry in a future
- * role-based template switcher (#28). Do not delete; keep it intact so the
- * switcher can offer it unchanged.
+ * built-in preset in the Assistant template switcher (#28). Keep its text
+ * intact so the original contract-review behavior stays available.
  */
 export const CONTRACT_REVIEW_SYSTEM_PROMPT = `You are a contract review assistant for an in-house legal team.
 

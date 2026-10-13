@@ -17,10 +17,14 @@ export function PromptPanel({
   value,
   onChange,
   onReset,
+  disabled = false,
+  resetTitle,
 }: {
   value: string;
   onChange: (value: string) => void;
   onReset: () => void;
+  disabled?: boolean;
+  resetTitle?: string;
 }) {
   const [copied, setCopied] = useState(false);
   const blank = value.trim().length === 0;
@@ -47,7 +51,7 @@ export function PromptPanel({
           </Pill>
         </div>
         <div className="flex gap-1.5">
-          <Btn variant="ghost" size="sm" icon="refresh" onClick={onReset}>
+          <Btn variant="ghost" size="sm" icon="refresh" onClick={onReset} disabled={disabled} title={resetTitle}>
             Reset
           </Btn>
           <Btn variant="ghost" size="sm" icon="copy" onClick={onCopy}>
@@ -57,6 +61,7 @@ export function PromptPanel({
       </div>
 
       <textarea
+        disabled={disabled}
         value={value}
         onChange={(e) => onChange(e.target.value)}
         aria-label="System prompt template"

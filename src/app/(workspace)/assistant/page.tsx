@@ -1,4 +1,5 @@
 import { AssistantChat } from "@/components/assistant/assistant-chat";
+import { listPromptTemplates } from "@/lib/prompt-template-store";
 import { modelFor } from "@/lib/anthropic";
 import { loadActiveThread } from "@/lib/chat-store";
 import { modelDisplayLabel } from "@/lib/chat-ui";
@@ -11,7 +12,7 @@ export const dynamic = "force-dynamic";
 // called) and seeds the client chat with the persisted thread (#22). The
 // sidebar + DocsProvider live in the layout.
 export default async function AssistantPage() {
-  const thread = await loadActiveThread();
+  const [thread, templates] = await Promise.all([loadActiveThread(), listPromptTemplates()]);
   // Resolve once so the label pill and the pricing lookup can never disagree
   // about which model was actually called.
   const model = modelFor("assistant");
@@ -19,6 +20,7 @@ export default async function AssistantPage() {
     <AssistantChat
       modelLabel={modelDisplayLabel(model)}
       modelId={model}
+      initialTemplates={templates}
       initialSessionId={thread.sessionId}
       initialMessages={thread.messages}
     />

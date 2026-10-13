@@ -158,3 +158,27 @@ saved. Document selection is saved when sending or switching, and documents that
 no longer exist are omitted when reopening. The editable system prompt remains a
 workspace setting, not part of each saved chat. If another browser tab changes the
 active session, reload the stale tab before sending again.
+
+
+### Assistant prompt templates
+
+Open **Show prompt** to switch between **General legal** and the original
+**Contract review** preset. Both remain fully editable; **Reset** restores the
+selected template's saved text. **Save as new** saves your current text as a named
+custom template in the local SQLite database. Custom templates support **Save
+changes**, **Rename**, and **Delete**; built-ins cannot be overwritten or deleted.
+Switching away from unsaved edits and deleting a template require confirmation.
+Names may contain 1–120 characters; saved prompts must be nonblank and at most
+100,000 characters. Renaming preserves unsaved prompt edits.
+
+The selected name stays visible beside Show/Hide prompt. The selection and edits
+survive hiding the panel and switching chat sessions. Reload starts with General
+legal and discards unsaved edits; saved custom templates remain available. Deleting
+a template leaves chat messages intact and selects General legal. Changes apply to
+subsequent requests, including retries and regeneration. The document expansion
+and fixed citation instructions remain visible in the prompt panel.
+
+Existing checkouts must run `pnpm exec prisma migrate deploy` and
+`pnpm exec prisma generate` after updating to add the template table. This migration
+preserves existing documents and chats. Templates belong to this local workspace;
+concurrent edits from multiple tabs use the last successful save.

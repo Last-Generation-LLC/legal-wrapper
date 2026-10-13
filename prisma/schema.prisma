@@ -66,3 +66,12 @@ model Message {
 
   @@index([chatSessionId])
 }
+
+/// User-created Assistant system prompts. Built-in presets remain in code.
+model PromptTemplate {
+  id        String   @id @default(cuid())
+  name      String
+  content   String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}

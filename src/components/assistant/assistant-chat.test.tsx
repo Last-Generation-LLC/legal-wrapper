@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { AssistantChat } from "./assistant-chat";
 import { DocsProvider, useDocs } from "@/components/documents/docs-context";
+import { CONTRACT_REVIEW_SYSTEM_PROMPT } from "@/lib/wrapper";
 import type { DocumentMeta } from "@/lib/documents";
 
 vi.mock("@/components/documents/use-upload", () => ({ useUpload: () => ({ upload: vi.fn(), uploading: false }) }));
@@ -152,4 +153,30 @@ it("shows a list-loading failure and lets the user retry", async () => {
   fireEvent.click(screen.getByRole("button", { name: "Refresh list" }));
   await screen.findByRole("button", { name: "Open Old lease" });
   expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+});
+
+it("keeps a template across panel hiding and session switches, then sends the visible edit", async () => {
+  mount();
+  fireEvent.click(screen.getByRole("button", { name: /Show prompt/ }));
+  fireEvent.change(screen.getByRole("combobox"), { target: { value: "builtin:contract" } });
+  expect(screen.getByLabelText("System prompt template")).toHaveValue(CONTRACT_REVIEW_SYSTEM_PROMPT);
+  const edited = CONTRACT_REVIEW_SYSTEM_PROMPT + "\nPrioritize termination rights.";
+  fireEvent.change(screen.getByLabelText("System prompt template"), { target: { value: edited } });
+  fireEvent.click(screen.getByRole("button", { name: /Hide prompt/ }));
+  expect(screen.getByRole("button", { name: /Show prompt/ })).toHaveTextContent("Contract review");
+  await showSessions();
+  fireEvent.click(screen.getByRole("button", { name: "Open Old lease" }));
+  await screen.findByText("Archived question");
+  fireEvent.click(screen.getByRole("button", { name: /Show prompt/ }));
+  expect(screen.getByRole("combobox")).toHaveValue("builtin:contract");
+  expect(screen.getByLabelText("System prompt template")).toHaveValue(edited);
+  fireEvent.click(screen.getByRole("button", { name: /Hide prompt/ }));
+  fireEvent.change(screen.getByRole("textbox"), { target: { value: "Review termination" } });
+  fireEvent.click(screen.getByRole("button", { name: "Send" }));
+  await waitFor(() => expect(chatBody?.systemPromptTemplate).toBe(edited));
+  fireEvent.click(screen.getByRole("button", { name: /Show prompt/ }));
+  expect(screen.getByLabelText("System prompt template")).toBeDisabled();
+  expect(screen.getByRole("combobox")).toBeDisabled();
+  fireEvent.click(screen.getByRole("button", { name: "New session" }));
+  await waitFor(() => expect(chatSignal?.aborted).toBe(true));
 });
