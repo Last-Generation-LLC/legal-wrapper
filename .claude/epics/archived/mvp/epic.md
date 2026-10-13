@@ -42,7 +42,7 @@ drives both tabs (Opus for Assistant, Sonnet for Review). Vercel AI SDK handles
 streaming. Prompt caching is load-bearing for the Review grid. A shared
 citation/confidence structured-output contract feeds both tabs.
 
-Maps to the four CLAUDE.md build phases:
+Maps to the four AGENTS.md build phases:
 - **Foundation + Phase 1** (skeleton, design system, upload, doc sidebar): 001–005
 - **Phase 2** (wrapper, Assistant): 006–010
 - **Phase 3** (Review grid): 011–014

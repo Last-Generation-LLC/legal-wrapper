@@ -20,7 +20,7 @@ only external service is the Anthropic API.
 
 ## Prerequisites
 
-- **Node 20+**
+- **Node 20.19+, 22.13+, 24, or 26** (use the latest patch of your chosen major).
 - **[pnpm](https://pnpm.io/)** — the package manager for this project.
 - **An Anthropic API key** — get one at
   <https://console.anthropic.com/settings/keys>.
@@ -101,6 +101,20 @@ folder, which is gitignored — keep them on your machine, not in the repo.
   generally cleaner.
 - **Demo, not production.** This is a local single-user tool by design. There is
   no authentication, no multi-user support, and no cloud deployment.
+
+## Development checks
+
+```bash
+pnpm lint
+pnpm exec tsc --noEmit
+pnpm test
+```
+
+The **CI** GitHub Actions workflow runs these checks on Node 20, 22, 24, and 26
+for pushes and pull requests. Tests use mocked API calls and need no Anthropic
+key or local database. CI installs the pnpm version pinned in `package.json`
+with a frozen lockfile; allowed dependency install scripts are listed in
+`pnpm-workspace.yaml`.
 
 ## Secret checks
 

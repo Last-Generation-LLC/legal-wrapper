@@ -1,0 +1,6 @@
+# Dependency install scripts permitted by this project.
+onlyBuiltDependencies:
+  - "@prisma/client"
+  - "@prisma/engines"
+  - "esbuild"
+  - "prisma"
