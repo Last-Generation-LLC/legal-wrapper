@@ -13,7 +13,7 @@ export function StatusBar({
   rows: number;
   columns: number;
   counts: { total: number; done: number; running: number; error: number };
-  /** Preformatted per-run cost (e.g. "$0.0123"); omitted when nothing has run. */
+  /** Preformatted cost of current completed results (e.g. "$0.0123"); omitted when nothing has run. */
   cost?: string;
   /** Preformatted cache-hit percent (e.g. "42%"); omitted when nothing has run. */
   cachePct?: string;
@@ -47,7 +47,7 @@ export function StatusBar({
         {/* cost + cachePct are provided as a pair (or not at all) — a lone
             cache pill without a cost reads confusingly. */}
         {cost && (
-          <Pill tone="default" title="Estimated cost of this grid run">
+          <Pill tone="default" title="Cost of the currently displayed completed results">
             {cost}
           </Pill>
         )}

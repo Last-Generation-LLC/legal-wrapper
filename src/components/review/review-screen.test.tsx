@@ -305,3 +305,85 @@ describe("ReviewScreen — inspector", () => {
     expect(screen.queryByRole("button", { name: /Regenerate/ })).not.toBeInTheDocument();
   });
 });
+
+describe("row and column re-runs", () => {
+  const columns = [
+    { id: "a", title: "Alpha", prompt: "Question A", width: 200 },
+    { id: "b", title: "Beta", prompt: "Question B", width: 200 },
+  ];
+
+  beforeEach(() => {
+    localStorage.setItem(COLUMNS_STORAGE_KEY, JSON.stringify(columns));
+  });
+
+  it("forces only the chosen row or column, shows subset usage, and keeps Run all's skip behavior", async () => {
+    const fetch = vi.fn().mockImplementation(() => Promise.resolve(cellResponse("Answer")));
+    vi.stubGlobal("fetch", fetch);
+    renderScreen([doc("d1"), doc("d2")], ["d1", "d2"]);
+    fireEvent.click(screen.getByRole("button", { name: "Run all" }));
+    await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent("Finished · 4 completed"));
+    fetch.mockClear();
+
+    fireEvent.click(screen.getByRole("button", { name: "Run all" }));
+    await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent("Finished · 0 completed"));
+    expect(fetch).not.toHaveBeenCalled();
+
+    expect(screen.getAllByText(/^Est\./)).toHaveLength(2);
+    fireEvent.click(screen.getByRole("button", { name: "Re-run row: d1.pdf" }));
+    await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent("Row: d1.pdf · Finished · 2 completed"));
+    expect(fetch.mock.calls.map(([, init]) => JSON.parse(init.body))).toEqual([
+      { docId: "d1", prompt: "Question A", model: "claude-sonnet-4-6" },
+      { docId: "d1", prompt: "Question B", model: "claude-sonnet-4-6" },
+    ]);
+    expect(screen.getByRole("status")).toHaveTextContent("Reported usage $0.0009");
+    expect(screen.getAllByText("Answer")).toHaveLength(4);
+    fetch.mockClear();
+
+    fireEvent.change(screen.getByRole("combobox", { name: "Review model" }), { target: { value: "claude-haiku-5-5" } });
+    fireEvent.click(screen.getByText("Beta"));
+    expect(screen.getAllByText(/^Est\./)).toHaveLength(3);
+    fireEvent.click(screen.getByRole("button", { name: "Re-run column" }));
+    await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent("Column: Beta · Finished · 2 completed"));
+    expect(fetch.mock.calls.map(([, init]) => JSON.parse(init.body))).toEqual([
+      { docId: "d1", prompt: "Question B", model: "claude-haiku-5-5" },
+      { docId: "d2", prompt: "Question B", model: "claude-haiku-5-5" },
+    ]);
+    expect(screen.queryByLabelText(/Column title/)).not.toBeInTheDocument();
+  });
+
+  it("blocks overlapping actions while a row is warming and reports failed/skipped cells", async () => {
+    let finish!: (response: Response) => void;
+    const fetch = vi.fn().mockImplementation(() => new Promise<Response>((resolve) => { finish = resolve; }));
+    vi.stubGlobal("fetch", fetch);
+    renderScreen([doc("d1")], ["d1"]);
+    fireEvent.click(screen.getByRole("button", { name: "Re-run row: d1.pdf" }));
+    expect(fetch).toHaveBeenCalledTimes(1);
+    expect(screen.getByRole("button", { name: "Re-run row: d1.pdf" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Running…" })).toBeDisabled();
+    expect(screen.getByRole("combobox", { name: "Review model" })).toBeDisabled();
+    finish(Response.json({ error: "Rate limited" }, { status: 429 }));
+    await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent("Finished · 0 completed · 2 failed/skipped"));
+    expect(screen.getByRole("status")).not.toHaveTextContent("Reported usage");
+    expect(fetch).toHaveBeenCalledTimes(1);
+    expect(screen.getByRole("button", { name: "Re-run row: d1.pdf" })).toBeEnabled();
+  });
+});
+
+
+it("keeps subset and Run all actions locked during inspector regeneration", async () => {
+  const fetch = vi.fn().mockImplementation(() => Promise.resolve(cellResponse("Answer")));
+  vi.stubGlobal("fetch", fetch);
+  renderScreen([doc("d1")], ["d1"]);
+  fireEvent.click(screen.getByRole("button", { name: "Run all" }));
+  await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent("Finished · 6 completed"));
+  fireEvent.click(screen.getAllByRole("button", { name: /Answer/ })[0]);
+  let finish!: (response: Response) => void;
+  fetch.mockImplementation(() => new Promise<Response>((resolve) => { finish = resolve; }));
+  fireEvent.click(screen.getByRole("button", { name: "Regenerate" }));
+  expect(screen.getByRole("button", { name: "Re-run row: d1.pdf" })).toBeDisabled();
+  expect(screen.getByRole("button", { name: "Running…" })).toBeDisabled();
+  expect(screen.getByRole("button", { name: "Regenerate" })).toBeDisabled();
+  finish(cellResponse("Updated"));
+  await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent("Regenerate cell · Finished · 1 completed"));
+  expect(screen.getByRole("button", { name: "Run all" })).toBeEnabled();
+});

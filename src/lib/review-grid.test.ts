@@ -259,7 +259,7 @@ describe("runGrid", () => {
     expect(tracked).toHaveBeenCalledTimes(6);
   });
 
-  it("caps global concurrency", async () => {
+  it.each([false, true])("caps global concurrency (force=%s)", async (force) => {
     const { runCell, peakInFlight } = instrumentedRunner();
     await runGrid({
       docIds: ["d1", "d2", "d3", "d4", "d5", "d6"],
@@ -268,6 +268,7 @@ describe("runGrid", () => {
       runCell,
       onUpdate: () => {},
       concurrency: 2,
+      force,
     });
     expect(peakInFlight()).toBe(2);
   });
@@ -423,5 +424,37 @@ describe("model pick", () => {
     });
     const done = updates.at(-1);
     expect(done?.status === "done" && done.modelUsed).toBe("claude-haiku-5-5");
+  });
+});
+
+describe("forced subset runs", () => {
+  it("refreshes completed cells only in the supplied subset, still skipping in-flight cells", async () => {
+    const columns = [col("a"), col("b")];
+    const cells: CellMap = {
+      [cellKey("d1", "a")]: doneCell("prompt-a"),
+      [cellKey("d1", "b")]: { status: "running" },
+      [cellKey("d2", "a")]: doneCell("prompt-a"),
+    };
+    const runCell = vi.fn().mockResolvedValue({ answer: answerOf("new"), usage });
+    const onUpdate = vi.fn();
+    await runGrid({ docIds: ["d1"], columns, cells, runCell, onUpdate, force: true });
+    expect(runCell.mock.calls).toEqual([["d1", "prompt-a"]]);
+    expect(onUpdate.mock.calls.map(([d, c]) => [d, c])).toEqual([["d1", "a"], ["d1", "a"]]);
+    expect(cells[cellKey("d2", "a")]).toEqual(doneCell("prompt-a"));
+  });
+
+  it("waits for a forced row's warming cell and skips its siblings on failure", async () => {
+    let fail!: (reason: Error) => void;
+    const runCell = vi.fn().mockImplementation(() => new Promise((_, reject) => { fail = reject; }));
+    const onUpdate = vi.fn();
+    const columns = [col("a"), col("b"), col("c")];
+    const cells = Object.fromEntries(columns.map((c) => [cellKey("d1", c.id), doneCell(c.prompt)]));
+    const pending = runGrid({ docIds: ["d1"], columns, cells, runCell, onUpdate, force: true });
+    expect(runCell).toHaveBeenCalledTimes(1);
+    fail(new Error("rate limited"));
+    await pending;
+    expect(runCell).toHaveBeenCalledTimes(1);
+    expect(onUpdate.mock.calls.filter(([, , result]) => result.status === "error")).toHaveLength(3);
+    expect(onUpdate).toHaveBeenCalledWith("d1", "b", expect.objectContaining({ message: expect.stringContaining("rate limited") }));
   });
 });

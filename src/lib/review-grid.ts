@@ -268,6 +268,8 @@ export async function runGrid(options: {
   concurrency?: number;
   /** The selected model: done cells answered by a different model re-run. */
   model?: string;
+  /** Explicit subset re-run: refresh completed cells too, never in-flight cells. */
+  force?: boolean;
 }): Promise<void> {
   const { docIds, columns, cells, runCell, onUpdate, model } = options;
   const semaphore = new Semaphore(options.concurrency ?? RUN_CONCURRENCY);
@@ -291,7 +293,10 @@ export async function runGrid(options: {
 
   await Promise.all(
     docIds.map(async (docId) => {
-      const queue = columns.filter((col) => needsRun(cells[cellKey(docId, col.id)], col.prompt, model));
+      const queue = columns.filter((col) => {
+        const cell = cells[cellKey(docId, col.id)];
+        return options.force ? cell?.status !== "running" : needsRun(cell, col.prompt, model);
+      });
       if (queue.length === 0) return;
 
       const [warm, ...rest] = queue;

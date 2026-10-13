@@ -80,7 +80,12 @@ Then open <http://localhost:3000>.
    to the model.
 3. **Review.** Pick documents as rows and define prompt columns, then run the
    grid. Each cell is one model call; results fill in as they complete. Click a
-   cell to see the full answer, or export the whole grid to CSV.
+   cell to see the full answer, or export the whole grid to CSV. Use **Re-run row**
+   beside a document or **Re-run column** in a column's header menu to refresh
+   just those cells, including completed answers, with the selected model.
+   These actions make new API calls. Rough estimates appear beside the actions;
+   the latest run's summary shows costs calculated from successful response usage.
+   **Run all** continues to skip unchanged completed cells.
 
 ## Running a demo
 

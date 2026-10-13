@@ -129,3 +129,24 @@ export function formatRateCard(modelId: string): string | undefined {
 export function formatCachePct(rate: number): string {
   return `${Math.round(rate * 100)}%`;
 }
+
+/** Deliberately rough cold-cache budget, not a ceiling or promise of cache savings. */
+export function estimateReviewCost(
+  documents: readonly { tokenCount: number }[],
+  columns: readonly { prompt: string }[],
+  modelId: string,
+): string | undefined {
+  if (!MODEL_PRICING[modelId]) return undefined;
+  const cost = documents.reduce((total, doc) => total + columns.reduce(
+    (subtotal, col) => subtotal + usageCostUsd({
+      cacheWriteInputTokens: doc.tokenCount + 1000,
+      uncachedInputTokens: Math.ceil(col.prompt.length / 4),
+      cacheReadInputTokens: 0,
+      outputTokens: 512,
+    }, modelId), 0,
+  ), 0);
+  return formatUsd(cost);
+}
+
+export const REVIEW_ESTIMATE_NOTE =
+  "Rough estimate: cold cache writes, stored document token counts, 1,000 overhead tokens and 512 output tokens per cell; prompt length is approximate. Actual cost varies; this is not a ceiling.";

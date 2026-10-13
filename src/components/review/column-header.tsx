@@ -13,6 +13,9 @@ export function ColumnHeader({
   onToggleEdit,
   onChange,
   onDelete,
+  onRerun,
+  rerunDisabled,
+  estimate,
 }: {
   col: ReviewColumn;
   editing: boolean;
@@ -21,6 +24,9 @@ export function ColumnHeader({
   onToggleEdit: () => void;
   onChange: (col: ReviewColumn) => void;
   onDelete: () => void;
+  onRerun?: () => void;
+  rerunDisabled?: boolean;
+  estimate?: string;
 }) {
   return (
     <div style={{ width: col.width }} className="relative shrink-0 border-r border-border-soft">
@@ -60,6 +66,14 @@ export function ColumnHeader({
               className="mt-1 block w-full resize-none rounded-[3px] border border-border bg-panel-hi px-2 py-1.5 font-mono text-[11px] normal-case leading-[1.5] tracking-normal text-foreground outline-none focus:border-amber"
             />
           </label>
+          {onRerun && (
+            <div className="mt-2.5 flex flex-wrap items-center gap-2">
+              <Btn variant="ghost" size="sm" icon="refresh" disabled={disabled || rerunDisabled} onClick={onRerun}>
+                Re-run column
+              </Btn>
+              <span className="font-mono text-[10px] text-dim">Est. {estimate ?? "unavailable"}</span>
+            </div>
+          )}
           <div className="mt-2.5 flex items-center justify-between">
             <Btn variant="ghost" size="sm" icon="x" className="text-red" onClick={onDelete}>
               Delete

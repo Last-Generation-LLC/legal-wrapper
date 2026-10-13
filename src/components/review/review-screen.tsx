@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useSyncExternalStore } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { TopBar } from "@/components/layout/top-bar";
 import { Btn } from "@/components/ui/btn";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -26,6 +26,8 @@ import {
 import { csvFilename, downloadCsv, gridToCsv } from "@/lib/review-csv";
 import {
   cacheHitRate,
+  estimateReviewCost,
+  REVIEW_ESTIMATE_NOTE,
   formatCachePct,
   formatUsd,
   MODEL_PRICING,
@@ -76,6 +78,10 @@ function ReviewGrid({
   );
   const [cells, setCells] = useState<CellMap>({});
   const [running, setRunning] = useState(false);
+  const runLock = useRef(false);
+  const [lastRun, setLastRun] = useState<{
+    label: string; complete: boolean; done: number; errors: number; cost: number; priced: boolean;
+  } | null>(null);
   const [editingColId, setEditingColId] = useState<string | null>(null);
   const [selected, setSelected] = useState<{ docId: string; colId: string } | null>(null);
   const [modelId, setModelId] = useState(() =>
@@ -110,33 +116,49 @@ function ReviewGrid({
     setCells((prev) => ({ ...prev, [cellKey(docId, colId)]: result }));
   }
 
-  async function handleRunAll() {
-    if (running) return;
-    // Close any open column editor first (review finding): its inputs are not
-    // individually disabled, so a panel left open could edit or delete a
-    // column mid-run and desync the run's promptUsed bookkeeping — and the
-    // disabled header toggle prevents reopening one until the run finishes.
+  async function handleRun(
+    label: string,
+    runDocIds: string[],
+    runColumns: ReviewColumn[],
+    force = false,
+    singleCell = false,
+  ) {
+    if (runLock.current || runDocIds.length === 0 || runColumns.length === 0) return;
+    runLock.current = true;
     setEditingColId(null);
     setRunning(true);
+    const summary = { label, complete: false, done: 0, errors: 0, cost: 0, priced: true };
+    setLastRun({ ...summary });
+    const onUpdate = (docId: string, colId: string, result: CellResult) => {
+      setCell(docId, colId, result);
+      if (result.status === "done") {
+        summary.done++;
+        const usedModel = result.modelUsed ?? modelId;
+        summary.priced &&= Boolean(MODEL_PRICING[usedModel]);
+        summary.cost += usageCostUsd(result.usage, usedModel);
+      } else if (result.status === "error") {
+        summary.errors++;
+      }
+      setLastRun({ ...summary });
+    };
     try {
-      await runGrid({
-        docIds,
-        columns,
-        cells,
-        runCell,
-        onUpdate: setCell,
-        model: modelId,
-      });
+      if (singleCell) {
+        await regenerateCell({ docId: runDocIds[0], col: runColumns[0], runCell, onUpdate });
+      } else {
+        await runGrid({ docIds: runDocIds, columns: runColumns, cells, runCell, onUpdate, model: modelId, force });
+      }
     } finally {
+      setLastRun({ ...summary, complete: true });
+      runLock.current = false;
       setRunning(false);
     }
   }
 
   async function handleRegenerate() {
-    if (!effectiveSelected || running) return;
+    if (!effectiveSelected) return;
     const col = columns.find((c) => c.id === effectiveSelected.colId);
     if (!col) return;
-    await regenerateCell({ docId: effectiveSelected.docId, col, runCell, onUpdate: setCell });
+    await handleRun("Regenerate cell", [effectiveSelected.docId], [col], true, true);
   }
 
   // Exports the grid AS IT IS — running/idle cells come out empty, error
@@ -216,7 +238,7 @@ function ReviewGrid({
             >
               CSV
             </Btn>
-            <Btn variant="primary" size="sm" icon="play" disabled={!canRun} onClick={() => void handleRunAll()}>
+            <Btn variant="primary" size="sm" icon="play" disabled={!canRun} onClick={() => void handleRun("Run all", docIds, columns)}>
               {running ? "Running…" : "Run all"}
             </Btn>
           </div>
@@ -224,6 +246,16 @@ function ReviewGrid({
       />
       <StatusBar rows={docIds.length} columns={columns.length} counts={counts} cost={runCost} cachePct={runCachePct} />
 
+      <div className="border-b border-border-soft bg-bg px-5 py-2 font-mono text-[10px] text-dim">
+        <p>{REVIEW_ESTIMATE_NOTE}</p>
+        {lastRun && (
+          <p role="status" className="mt-1 text-muted-foreground">
+            {lastRun.label} · {lastRun.complete ? "Finished" : "Running…"} · {lastRun.done} completed · {lastRun.errors} failed/skipped
+            {lastRun.done > 0 && lastRun.priced && ` · Reported usage ${formatUsd(lastRun.cost)}`}
+            {lastRun.errors > 0 && " · Failed requests may have unreported charges."}
+          </p>
+        )}
+      </div>
       <div className="flex-1 overflow-auto bg-bg">
         <div
           style={{
@@ -250,6 +282,9 @@ function ReviewGrid({
                 onToggleEdit={() => setEditingColId((c) => (c === col.id ? null : col.id))}
                 onChange={updateColumn}
                 onDelete={() => deleteColumn(col.id)}
+                onRerun={() => void handleRun(`Column: ${col.title}`, docIds, [col], true)}
+                rerunDisabled={!canRun}
+                estimate={estimateReviewCost(docs, [col], modelId)}
               />
             ))}
             <div className="flex flex-1 items-center px-3 py-2">
@@ -273,6 +308,17 @@ function ReviewGrid({
                   <span>{docFormat(doc.mimeType)}</span>
                   <span>·</span>
                   <span>{formatTokens(doc.tokenCount, doc.tokenCountEstimated)}</span>
+                </div>
+                <Btn
+                  variant="ghost" size="sm" icon="refresh" className="mt-1"
+                  aria-label={`Re-run row: ${docLabel(doc)}`}
+                  disabled={!canRun}
+                  onClick={() => void handleRun(`Row: ${docLabel(doc)}`, [doc.id], columns, true)}
+                >
+                  Re-run row
+                </Btn>
+                <div className="font-mono text-[10px] text-dim">
+                  Est. {estimateReviewCost([doc], columns, modelId) ?? "unavailable"}
                 </div>
               </div>
               {columns.map((col) => (
