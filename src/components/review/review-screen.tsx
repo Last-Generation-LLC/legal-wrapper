@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useSyncExternalStore } from "react";
 import { TopBar } from "@/components/layout/top-bar";
 import { Btn } from "@/components/ui/btn";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -43,36 +43,46 @@ const DOC_COL_WIDTH = 240;
 /** One choice in the Review model picker (built server-side from the registry). */
 export type ReviewModelOption = { id: string; label: string; rates?: string };
 
+type ReviewScreenProps = {
+  modelOptions: ReviewModelOption[];
+  defaultModelId: string;
+};
+
+const subscribeToHydration = () => () => {};
+const clientSnapshot = () => true;
+const serverSnapshot = () => false;
+
+export function ReviewScreen(props: ReviewScreenProps) {
+  const hydrated = useSyncExternalStore(subscribeToHydration, clientSnapshot, serverSnapshot);
+  // Keep SSR and hydration identical. Once the browser takes over, mount the
+  // editable grid with saved settings; the server preview never persists them.
+  return <ReviewGrid key={hydrated ? "client" : "server"} {...props} hydrated={hydrated} />;
+}
+
 // The Review screen's single stateful entry — children are presentational.
 // Rows are the shared sidebar selection (locked decision); columns and the
 // model pick persist to localStorage; cell results are in-memory and reset on reload.
-export function ReviewScreen({
+function ReviewGrid({
   modelOptions,
   defaultModelId,
-}: {
-  modelOptions: ReviewModelOption[];
-  defaultModelId: string;
-}) {
+  hydrated,
+}: ReviewScreenProps & { hydrated: boolean }) {
   const { documents, selectedIds } = useDocs();
   const docs = documents.filter((d) => selectedIds.includes(d.id));
   const docIds = docs.map((d) => d.id);
 
-  // Server render and first client render both show the starters; the user's
-  // stored columns swap in after mount (localStorage doesn't exist during SSR,
-  // and reading it pre-hydration would make the two renders disagree).
-  const [columns, setColumns] = useState<ReviewColumn[]>(STARTER_COLUMNS);
-  const [columnsLoaded, setColumnsLoaded] = useState(false);
+  const [columns, setColumns] = useState<ReviewColumn[]>(() =>
+    hydrated ? loadColumns(window.localStorage) : STARTER_COLUMNS,
+  );
   const [cells, setCells] = useState<CellMap>({});
   const [running, setRunning] = useState(false);
   const [editingColId, setEditingColId] = useState<string | null>(null);
   const [selected, setSelected] = useState<{ docId: string; colId: string } | null>(null);
-  const [modelId, setModelId] = useState(defaultModelId);
-
-  useEffect(() => {
-    setColumns(loadColumns(window.localStorage));
-    setModelId(loadModel(window.localStorage, modelOptions.map((o) => o.id), defaultModelId));
-    setColumnsLoaded(true);
-  }, [modelOptions, defaultModelId]);
+  const [modelId, setModelId] = useState(() =>
+    hydrated
+      ? loadModel(window.localStorage, modelOptions.map((o) => o.id), defaultModelId)
+      : defaultModelId,
+  );
 
   function changeModel(next: string) {
     setModelId(next);
@@ -83,8 +93,8 @@ export function ReviewScreen({
   const runCell = (docId: string, prompt: string) => fetchCell(docId, prompt, modelId);
 
   useEffect(() => {
-    if (columnsLoaded) saveColumns(window.localStorage, columns);
-  }, [columns, columnsLoaded]);
+    if (hydrated) saveColumns(window.localStorage, columns);
+  }, [columns, hydrated]);
 
   // Derive whether the selection is still valid at render time so we avoid
   // a useEffect that calls setState (which the lint rule disallows). If the

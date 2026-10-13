@@ -1,9 +1,10 @@
 // @vitest-environment jsdom
 import { useEffect, useRef } from "react";
+import { renderToString } from "react-dom/server";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { DocumentMeta } from "@/lib/documents";
-import { COLUMNS_STORAGE_KEY, STARTER_COLUMNS } from "@/lib/review-grid";
+import { COLUMNS_STORAGE_KEY, MODEL_STORAGE_KEY, STARTER_COLUMNS } from "@/lib/review-grid";
 import { DocsProvider, useDocs } from "@/components/documents/docs-context";
 import { downloadCsv } from "@/lib/review-csv";
 import { ReviewScreen } from "./review-screen";
@@ -71,6 +72,47 @@ beforeEach(() => {
 });
 
 describe("ReviewScreen", () => {
+  it("hydrates saved settings without overwriting them or resetting edits on a parent render", () => {
+    const storedColumns = [{ id: "mine", title: "Cap on liability", prompt: "What is the cap?", width: 200 }];
+    window.localStorage.setItem(COLUMNS_STORAGE_KEY, JSON.stringify(storedColumns));
+    window.localStorage.setItem(MODEL_STORAGE_KEY, "claude-haiku-5-5");
+    const write = vi.spyOn(Storage.prototype, "setItem");
+    const recover = vi.fn();
+    // Fresh arrays mirror server props being reconstructed on router refresh.
+    const tree = () => (
+      <DocsProvider documents={[]}>
+        <ReviewScreen
+          modelOptions={[
+            { id: "claude-sonnet-4-6", label: "SONNET 4.6" },
+            { id: "claude-haiku-5-5", label: "HAIKU 5.5" },
+          ]}
+          defaultModelId="claude-sonnet-4-6"
+        />
+      </DocsProvider>
+    );
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    container.innerHTML = renderToString(tree());
+    expect(container.textContent).toContain("Governing law");
+    expect(container.textContent).not.toContain("Cap on liability");
+    expect(write).not.toHaveBeenCalled();
+
+    const view = render(tree(), { container, hydrate: true, onRecoverableError: recover });
+    expect(view.getByText("Cap on liability")).toBeInTheDocument();
+    expect(view.getByRole("combobox", { name: "Review model" })).toHaveValue("claude-haiku-5-5");
+    expect(recover).not.toHaveBeenCalled();
+    expect(write.mock.calls.filter(([key]) => key === COLUMNS_STORAGE_KEY)).toEqual([
+      [COLUMNS_STORAGE_KEY, JSON.stringify(storedColumns)],
+    ]);
+
+    fireEvent.click(view.getByText("Cap on liability"));
+    fireEvent.change(view.getByLabelText(/Column title/), { target: { value: "Edited cap" } });
+    view.rerender(tree());
+    expect(view.getByLabelText(/Column title/)).toHaveValue("Edited cap");
+    expect(view.getByRole("combobox", { name: "Review model" })).toHaveValue("claude-haiku-5-5");
+    write.mockRestore();
+  });
+
   it("seeds the six starter columns and shows the empty-rows hint with no selection", () => {
     renderScreen([doc("d1")]);
     for (const col of STARTER_COLUMNS) {

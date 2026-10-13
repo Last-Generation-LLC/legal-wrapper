@@ -7,6 +7,8 @@ const eslintConfig = defineConfig([
   ...nextTs,
   // Override default ignores of eslint-config-next.
   globalIgnores([
+    // Standalone CDN/Babel design references, not Next.js application code.
+    "design_handoff_legal_wrapper/**",
     // Default ignores of eslint-config-next:
     ".next/**",
     "out/**",
