@@ -50,7 +50,8 @@ Then open `.env.local` and set:
 ANTHROPIC_API_KEY=sk-ant-...
 ```
 
-`.env.local` is gitignored — your key never gets committed.
+`.env.local` and other `.env.*` files are gitignored; the empty
+`.env.local.example` stays tracked. Never force-add a real environment file.
 
 ### 3. Set up the database
 
@@ -100,3 +101,27 @@ folder, which is gitignored — keep them on your machine, not in the repo.
   generally cleaner.
 - **Demo, not production.** This is a local single-user tool by design. There is
   no authentication, no multi-user support, and no cloud deployment.
+
+## Secret checks
+
+The **Secret scan** GitHub Actions workflow runs Gitleaks on all fetched Git
+history for pushes and pull requests. Findings fail the check, and secret
+values are redacted from its output. It requires no API key or paid Gitleaks
+Action license. This check detects committed secrets after a push; enable
+GitHub push protection separately when available for the repository.
+
+To scan committed history locally with [Gitleaks](https://github.com/gitleaks/gitleaks)
+8.30.1 installed:
+
+```bash
+gitleaks git . --log-opts="--all --full-history" --redact=100 --ignore-gitleaks-allow
+```
+
+This command does not check uncommitted files. Keep local environment files,
+`.next/`, databases, and `demo-corpora/` out of shared archives as well as Git.
+If a real key is committed, revoke or rotate it; deleting the current file
+does not remove it from history.
+
+## License
+
+[MIT](./LICENSE). Copyright (c) 2026 Last Generation, LLC.
