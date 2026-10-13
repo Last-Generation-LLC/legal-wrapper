@@ -12,6 +12,7 @@ export function Composer({
   onAttach,
   onCancelEdit,
   busy,
+  disabled = false,
   blocked,
   uploading,
   docCount,
@@ -24,6 +25,8 @@ export function Composer({
   onCancelEdit: () => void;
   /** True while a chat call is in flight — sending is disabled, typing is not. */
   busy: boolean;
+  /** Session changes temporarily lock draft edits and attachments as well as send. */
+  disabled?: boolean;
   /** Ceiling-block message (#16): sending is disabled and the reason shown. */
   blocked: string | null;
   uploading: boolean;
@@ -32,7 +35,7 @@ export function Composer({
   editing: boolean;
 }) {
   const fileRef = useRef<HTMLInputElement>(null);
-  const canSend = !busy && !blocked && value.trim().length > 0;
+  const canSend = !disabled && !busy && !blocked && value.trim().length > 0;
 
   function onKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
     if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
@@ -60,6 +63,7 @@ export function Composer({
         )}
         <div className="rounded-[4px] border border-border bg-panel px-3.5 py-3">
           <textarea
+            disabled={disabled}
             value={value}
             onChange={(e) => onChange(e.target.value)}
             onKeyDown={onKeyDown}
@@ -73,7 +77,7 @@ export function Composer({
                 variant="ghost"
                 size="sm"
                 icon="doc"
-                disabled={uploading}
+                disabled={uploading || disabled}
                 onClick={() => fileRef.current?.click()}
               >
                 {uploading ? "Uploading…" : "Attach"}

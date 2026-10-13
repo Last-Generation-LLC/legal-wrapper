@@ -11,6 +11,7 @@ type DocsContextValue = {
   documents: DocumentMeta[];
   selectedIds: string[];
   toggle: (id: string) => void;
+  select: (ids: string[]) => void;
   selectedCount: number;
   selectedTokens: number;
   totalCount: number;
@@ -46,6 +47,7 @@ export function DocsProvider({
       documents,
       selectedIds,
       toggle,
+      select: (ids) => setSelectedIds(ids.filter((id) => documents.some((doc) => doc.id === id))),
       selectedCount: selected.length,
       selectedTokens: selected.reduce((sum, d) => sum + d.tokenCount, 0),
       totalCount: documents.length,

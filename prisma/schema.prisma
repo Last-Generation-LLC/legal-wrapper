@@ -35,15 +35,14 @@ model Document {
 
 /// A single Assistant conversation. Groups its messages in order.
 /// Exactly one session is ACTIVE (archivedAt = null) at a time (#22):
-/// "New session" archives it rather than deleting — the session-list UI
-/// (#26) will browse the archive.
+/// "New session" archives it; the Sessions panel can reopen, rename or delete it.
 model ChatSession {
   id             String    @id @default(cuid())
   title          String? // optional friendly name for the conversation
   createdAt      DateTime  @default(now())
-  /// set when "New session" retires this thread; null = the active thread
+  /// set when switching away from this thread; null = the active thread
   archivedAt     DateTime?
-  /// JSON string[] of Document ids selected when the last turn was sent —
+  /// JSON string[] of Document ids selected at the last send or session switch —
   /// restored with the thread so the conversation keeps its context.
   selectedDocIds String    @default("[]")
   messages       Message[]

@@ -4,24 +4,28 @@ import type { AssistantUIMessage } from "@/lib/chat-ui";
 // Mock the Prisma singleton (established pattern — see documents.test.ts).
 vi.mock("@/lib/prisma", () => ({
   prisma: {
-    chatSession: { findFirst: vi.fn(), create: vi.fn(), update: vi.fn() },
+    chatSession: { findFirst: vi.fn(), findUnique: vi.fn(), findMany: vi.fn(), create: vi.fn(), update: vi.fn(), updateMany: vi.fn(), delete: vi.fn() },
     message: {
       findMany: vi.fn(),
       deleteMany: vi.fn(),
       createMany: vi.fn(),
       create: vi.fn(),
     },
-    $transaction: vi.fn(async (ops: unknown[]) => Promise.all(ops as Promise<unknown>[])),
+    $transaction: vi.fn(),
   },
 }));
 
 import { prisma } from "@/lib/prisma";
 import {
   appendMessage,
-  archiveActiveSession,
   getActiveSession,
   loadActiveThread,
   replaceThread,
+  changeSession,
+  renameSession,
+  listSessions,
+  SessionConflictError,
+  SessionNotFoundError,
 } from "./chat-store";
 
 const SESSION = {
@@ -47,7 +51,13 @@ function row(id: string, message: unknown, position: number) {
   };
 }
 
-beforeEach(() => vi.clearAllMocks());
+beforeEach(() => {
+  vi.clearAllMocks();
+  vi.mocked(prisma.chatSession.findUnique).mockResolvedValue(SESSION);
+  vi.mocked(prisma.message.findMany).mockResolvedValue([]);
+  vi.mocked(prisma.$transaction).mockImplementation(async (input: unknown) =>
+    typeof input === "function" ? input(prisma) : Promise.all(input as Promise<unknown>[]) as never);
+});
 
 describe("getActiveSession", () => {
   it("returns the existing active session", async () => {
@@ -156,18 +166,69 @@ describe("appendMessage", () => {
   });
 });
 
-describe("archiveActiveSession", () => {
-  it("archives the active session and creates a fresh one in one transaction", async () => {
-    vi.mocked(prisma.chatSession.findFirst).mockResolvedValue(SESSION);
-    const fresh = { ...SESSION, id: "s2" };
-    vi.mocked(prisma.chatSession.update).mockResolvedValue({ ...SESSION, archivedAt: new Date() });
-    vi.mocked(prisma.chatSession.create).mockResolvedValue(fresh);
-
-    expect(await archiveActiveSession()).toEqual(fresh);
-    expect(prisma.$transaction).toHaveBeenCalledTimes(1);
-    expect(prisma.chatSession.update).toHaveBeenCalledWith({
-      where: { id: "s1" },
-      data: { archivedAt: expect.any(Date) },
+describe("session management", () => {
+  it("lists only metadata and message counts, newest first", async () => {
+    await listSessions();
+    expect(prisma.chatSession.findMany).toHaveBeenCalledWith({
+      orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+      select: { id: true, title: true, createdAt: true, archivedAt: true, _count: { select: { messages: true } } },
     });
+  });
+
+  it("reopens archived messages and selection while saving outgoing selection atomically", async () => {
+    const archived = { ...SESSION, id: "s2", archivedAt: new Date(), selectedDocIds: '["d3"]' };
+    vi.mocked(prisma.chatSession.findUnique).mockResolvedValueOnce(SESSION).mockResolvedValueOnce(archived);
+    vi.mocked(prisma.chatSession.update).mockResolvedValueOnce(SESSION).mockResolvedValueOnce({ ...archived, archivedAt: null });
+    const message = uiMessage("saved", "assistant", "Saved answer");
+    vi.mocked(prisma.message.findMany).mockResolvedValue([row("saved", message, 0)]);
+    expect(await changeSession({ action: "open", sessionId: "s2" }, "s1", ["d4"])).toEqual({
+      sessionId: "s2", messages: [message], selectedDocIds: ["d3"],
+    });
+    expect(prisma.chatSession.update).toHaveBeenNthCalledWith(1, {
+      where: { id: "s1" }, data: { archivedAt: expect.any(Date), selectedDocIds: '["d4"]' },
+    });
+    expect(prisma.$transaction).toHaveBeenCalledTimes(1);
+  });
+
+  it("deletes an archived session without replacing the active thread", async () => {
+    vi.mocked(prisma.chatSession.findUnique).mockResolvedValueOnce(SESSION).mockResolvedValueOnce({ ...SESSION, id: "s2", archivedAt: new Date() });
+    expect(await changeSession({ action: "delete", sessionId: "s2" }, "s1", [])).toBeNull();
+    expect(prisma.chatSession.delete).toHaveBeenCalledWith({ where: { id: "s2" } });
+    expect(prisma.chatSession.create).not.toHaveBeenCalled();
+    expect(prisma.chatSession.update).not.toHaveBeenCalled();
+  });
+
+  it("deletes the active thread and returns an empty replacement", async () => {
+    vi.mocked(prisma.chatSession.create).mockResolvedValue({ ...SESSION, id: "new", selectedDocIds: "[]" });
+    expect(await changeSession({ action: "delete", sessionId: "s1" }, "s1", [])).toEqual({ sessionId: "new", messages: [], selectedDocIds: [] });
+    expect(prisma.chatSession.delete).toHaveBeenCalledWith({ where: { id: "s1" } });
+  });
+
+  it("new session saves the outgoing selection and returns a fresh thread", async () => {
+    vi.mocked(prisma.chatSession.create).mockResolvedValue({ ...SESSION, id: "new", selectedDocIds: "[]" });
+    expect((await changeSession({ action: "new" }, "s1", ["d2"]))?.sessionId).toBe("new");
+    expect(prisma.chatSession.update).toHaveBeenCalledWith({ where: { id: "s1" }, data: { archivedAt: expect.any(Date), selectedDocIds: '["d2"]' } });
+  });
+
+  it.each(["open", "delete"] as const)("missing %s target cannot archive or delete the current session", async (action) => {
+    vi.mocked(prisma.chatSession.findUnique).mockResolvedValueOnce(SESSION).mockResolvedValueOnce(null);
+    await expect(changeSession({ action, sessionId: "gone" }, "s1", [])).rejects.toBeInstanceOf(SessionNotFoundError);
+    expect(prisma.chatSession.update).not.toHaveBeenCalled();
+    expect(prisma.chatSession.delete).not.toHaveBeenCalled();
+  });
+
+  it("rejects a stale tab's switch and chat write before modifying any messages", async () => {
+    vi.mocked(prisma.chatSession.findUnique).mockResolvedValue({ ...SESSION, archivedAt: new Date() });
+    await expect(changeSession({ action: "new" }, "s1", [])).rejects.toBeInstanceOf(SessionConflictError);
+    await expect(replaceThread("s1", [], [])).rejects.toBeInstanceOf(SessionConflictError);
+    expect(prisma.chatSession.update).not.toHaveBeenCalled();
+    expect(prisma.message.deleteMany).not.toHaveBeenCalled();
+  });
+
+  it("renames existing sessions and rejects deleted ones", async () => {
+    vi.mocked(prisma.chatSession.updateMany).mockResolvedValueOnce({ count: 1 }).mockResolvedValueOnce({ count: 0 });
+    await renameSession("s1", "Lease review");
+    expect(prisma.chatSession.updateMany).toHaveBeenCalledWith({ where: { id: "s1" }, data: { title: "Lease review" } });
+    await expect(renameSession("gone", "Lease review")).rejects.toBeInstanceOf(SessionNotFoundError);
   });
 });

@@ -13,7 +13,7 @@ import {
 } from "ai";
 import { prisma } from "@/lib/prisma";
 import { languageModelFor } from "@/lib/anthropic";
-import { appendMessage, getActiveSession, replaceThread } from "@/lib/chat-store";
+import { appendMessage, replaceThread, SessionConflictError } from "@/lib/chat-store";
 import { CONTEXT_CEILING, overCeilingMessage } from "@/lib/context-ceiling";
 import { composeAssistantSystemPrompt } from "@/lib/wrapper";
 import { parseAssistantFooter } from "@/lib/contract";
@@ -30,6 +30,7 @@ const MAX_OUTPUT_TOKENS = 4096;
 // messages are only shallow-checked here; validateUIMessages does the deep
 // structural validation below with a precise error.
 const BodySchema = z.object({
+  sessionId: z.string().min(1),
   docIds: z.array(z.string().min(1)),
   systemPromptTemplate: z.string().min(1),
   messages: z.array(z.unknown()).min(1),
@@ -111,8 +112,14 @@ export async function POST(request: Request) {
   // replace-all inherits edit/truncate/regenerate semantics. If the stream
   // later fails, the user's turn is already safe; only the never-finished
   // assistant text is lost on a mid-stream reload.
-  const session = await getActiveSession();
-  await replaceThread(session.id, messages as AssistantUIMessage[], docIds);
+  const sessionId = parsed.data.sessionId;
+  try {
+    await replaceThread(sessionId, messages as AssistantUIMessage[], docIds);
+  } catch (err) {
+    if (err instanceof SessionConflictError) return error("This session is no longer active. Reload to continue.", 409);
+    throw err;
+  }
+  if (request.signal.aborted) return new Response(null, { status: 499 });
 
   // Conversion can throw even after validateUIMessages passes — a history
   // part the model API can't accept is a client-content problem, so keep the
@@ -145,6 +152,7 @@ export async function POST(request: Request) {
   const stream = createUIMessageStream({
     execute: async ({ writer }) => {
       const result = streamText({
+        abortSignal: request.signal,
         model: languageModelFor("assistant"),
         // The system prompt rides the messages array (not the `system` param) so
         // it can carry a cache breakpoint; this flag is the SDK's "yes, I meant
@@ -239,8 +247,9 @@ export async function POST(request: Request) {
       try {
         const usage = await result.totalUsage;
         const providerMetadata = await result.providerMetadata;
+        if (request.signal.aborted) return;
         await appendMessage(
-          session.id,
+          sessionId,
           {
             id: generateId(),
             role: "assistant",

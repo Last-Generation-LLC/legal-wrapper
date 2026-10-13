@@ -24,9 +24,11 @@ export function MessageThread({
   onRegenerate,
   onEditPrompt,
   onRetry,
+  actionsDisabled = false,
 }: {
   messages: AssistantUIMessage[];
   status: ChatStatus;
+  actionsDisabled?: boolean;
   error: Error | undefined;
   documents: DocumentMeta[];
   onRegenerate: (messageId: string) => void;
@@ -62,7 +64,7 @@ export function MessageThread({
               key={m.id}
               message={m}
               documents={documents}
-              busy={busy}
+              busy={busy || actionsDisabled}
               onRegenerate={() => onRegenerate(m.id)}
               onEditPrompt={() => onEditPrompt(m.id)}
             />
@@ -90,7 +92,7 @@ export function MessageThread({
         {status === "error" && error && (
           <div role="alert" className="mt-2 flex items-center gap-3 pl-[42px]">
             <span className="font-mono text-[10.5px] text-red">{error.message}</span>
-            <Btn variant="ghost" size="sm" icon="refresh" onClick={onRetry}>
+            <Btn variant="ghost" size="sm" icon="refresh" disabled={actionsDisabled} onClick={onRetry}>
               Retry
             </Btn>
           </div>

@@ -144,3 +144,17 @@ does not remove it from history.
 ## License
 
 [MIT](./LICENSE). Copyright (c) 2026 Last Generation, LLC.
+
+### Saved Assistant sessions
+
+The **Sessions** button opens the current and archived chat list inside Assistant.
+Open a saved chat to restore its messages and document selection, rename it inline,
+or delete it after confirmation. Deleting the current chat opens an empty replacement;
+deleting an archive leaves the current chat alone. Deletion cannot be undone.
+
+**New session** archives the current conversation. Switching or starting a session
+stops any unfinished answer and clears the unsent draft; completed messages remain
+saved. Document selection is saved when sending or switching, and documents that
+no longer exist are omitted when reopening. The editable system prompt remains a
+workspace setting, not part of each saved chat. If another browser tab changes the
+active session, reload the stale tab before sending again.

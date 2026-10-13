@@ -19,6 +19,7 @@ export default async function AssistantPage() {
     <AssistantChat
       modelLabel={modelDisplayLabel(model)}
       modelId={model}
+      initialSessionId={thread.sessionId}
       initialMessages={thread.messages}
     />
   );

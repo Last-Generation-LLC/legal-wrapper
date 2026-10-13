@@ -17,14 +17,14 @@ vi.mock("@/lib/anthropic", async (importOriginal) => {
 
 // Mock persistence (#22) — assert the route's two writes without a DB.
 vi.mock("@/lib/chat-store", () => ({
-  getActiveSession: vi.fn().mockResolvedValue({ id: "session1" }),
+  SessionConflictError: class extends Error {},
   replaceThread: vi.fn().mockResolvedValue(undefined),
   appendMessage: vi.fn().mockResolvedValue(undefined),
 }));
 
 import { prisma } from "@/lib/prisma";
 import { languageModelFor } from "@/lib/anthropic";
-import { appendMessage, replaceThread } from "@/lib/chat-store";
+import { appendMessage, replaceThread, SessionConflictError } from "@/lib/chat-store";
 import { POST } from "./route";
 
 // --- helpers ---------------------------------------------------------------
@@ -52,6 +52,7 @@ const MESSAGES = [
 
 function validBody(overrides: Record<string, unknown> = {}) {
   return {
+    sessionId: "session1",
     docIds: ["doc1"],
     systemPromptTemplate: "You are helpful.\n{{DOCUMENTS}}",
     messages: MESSAGES,
@@ -362,4 +363,62 @@ describe("POST /api/assistant/chat — streaming", () => {
     // Raw token counts from the original error must NOT leak to the client.
     expect(sse).not.toContain("250000");
   });
+});
+
+
+it("rejects missing session IDs and stale-session writes without a model call", async () => {
+  vi.clearAllMocks();
+  const missing = await POST(request(validBody({ sessionId: undefined })));
+  expect(missing.status).toBe(400);
+  vi.mocked(prisma.document.findMany).mockResolvedValue([DOC]);
+  vi.mocked(replaceThread).mockRejectedValueOnce(new SessionConflictError());
+  const stale = await POST(request(validBody()));
+  expect(stale.status).toBe(409);
+  expect(languageModelFor).not.toHaveBeenCalled();
+});
+
+it("does not invoke the model or append an answer for an already canceled request", async () => {
+  vi.clearAllMocks();
+  vi.mocked(prisma.document.findMany).mockResolvedValue([DOC]);
+  const controller = new AbortController();
+  const req = new Request(request(validBody()), { signal: controller.signal });
+  controller.abort();
+  expect((await POST(req)).status).toBe(499);
+  expect(languageModelFor).not.toHaveBeenCalled();
+  expect(appendMessage).not.toHaveBeenCalled();
+});
+
+it("forwards mid-stream cancellation to the model and skips the partial answer write", async () => {
+  vi.clearAllMocks();
+  vi.mocked(prisma.document.findMany).mockResolvedValue([DOC]);
+  let modelSignal: AbortSignal | undefined;
+  vi.mocked(languageModelFor).mockReturnValue(new MockLanguageModelV3({
+    doStream: async ({ abortSignal }) => {
+      modelSignal = abortSignal;
+      return {
+        stream: new ReadableStream({
+          start(controller) {
+            controller.enqueue({ type: "text-start", id: "text" });
+            controller.enqueue({ type: "text-delta", id: "text", delta: "Unfinished" });
+            abortSignal?.addEventListener("abort", () => controller.error(new DOMException("Aborted", "AbortError")));
+          },
+        }),
+      };
+    },
+  }) as unknown as ReturnType<typeof languageModelFor>);
+  const controller = new AbortController();
+  const res = await POST(new Request(request(validBody()), { signal: controller.signal }));
+  const reader = res.body!.getReader();
+  const decoder = new TextDecoder();
+  let content = "";
+  while (!content.includes("Unfinished")) {
+    const part = await reader.read();
+    if (part.done) throw new Error("Stream ended before the test could cancel it");
+    content += decoder.decode(part.value);
+  }
+  controller.abort();
+  while (!(await reader.read()).done) { /* drain cancellation events */ }
+  expect(modelSignal?.aborted).toBe(true);
+  expect(replaceThread).toHaveBeenCalledWith("session1", MESSAGES, ["doc1"]);
+  expect(appendMessage).not.toHaveBeenCalled();
 });

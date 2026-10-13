@@ -1,15 +1,15 @@
-// Server-side persistence for the Assistant's single auto-saved thread (#22).
+// Server-side persistence and session management for the Assistant.
 //
 // One ChatSession is ACTIVE (archivedAt = null) at any time; "New session"
-// archives it and starts a fresh one — nothing is deleted (the session-list
-// UI, #26, will browse the archive). Each Message row stores the FULL AI SDK
+// archives it and starts a fresh one. Explicit deletion cascades to messages.
+// Each Message row stores the FULL AI SDK
 // UIMessage as JSON so citations, confidence, and token usage round-trip
 // exactly; the client's message array is the source of truth and is
 // replace-all-written before every model call, which inherits the thread's
 // edit/truncate/regenerate semantics for free.
 
 import { cache } from "react";
-import type { ChatSession } from "@prisma/client";
+import type { ChatSession, Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import type { AssistantUIMessage } from "@/lib/chat-ui";
 
@@ -60,7 +60,11 @@ export interface ActiveThread {
  */
 export const loadActiveThread = cache(async function loadActiveThread(): Promise<ActiveThread> {
   const session = await getActiveSession();
-  const rows = await prisma.message.findMany({
+  return loadThread(session, prisma);
+});
+
+async function loadThread(session: ChatSession, db: Prisma.TransactionClient): Promise<ActiveThread> {
+  const rows = await db.message.findMany({
     where: { chatSessionId: session.id },
     orderBy: { position: "asc" },
   });
@@ -82,7 +86,7 @@ export const loadActiveThread = cache(async function loadActiveThread(): Promise
       .filter((m): m is AssistantUIMessage => m !== null),
     selectedDocIds,
   };
-});
+}
 
 /**
  * Replace the session's whole thread with the client's array (the truth) and
@@ -94,9 +98,11 @@ export async function replaceThread(
   messages: AssistantUIMessage[],
   selectedDocIds: string[],
 ): Promise<void> {
-  await prisma.$transaction([
-    prisma.message.deleteMany({ where: { chatSessionId: sessionId } }),
-    prisma.message.createMany({
+  await prisma.$transaction(async (tx) => {
+    const session = await tx.chatSession.findUnique({ where: { id: sessionId } });
+    if (!session || session.archivedAt) throw new SessionConflictError();
+    await tx.message.deleteMany({ where: { chatSessionId: sessionId } });
+    await tx.message.createMany({
       data: messages.map((message, position) => ({
         id: message.id,
         chatSessionId: sessionId,
@@ -104,12 +110,12 @@ export async function replaceThread(
         content: JSON.stringify(message),
         position,
       })),
-    }),
-    prisma.chatSession.update({
+    });
+    await tx.chatSession.update({
       where: { id: sessionId },
       data: { selectedDocIds: JSON.stringify(selectedDocIds) },
-    }),
-  ]);
+    });
+  });
 }
 
 /** Append one message (the finished assistant turn) after the existing thread. */
@@ -129,15 +135,51 @@ export async function appendMessage(
   });
 }
 
-/** "New session": archive the active thread (never delete) and start fresh. */
-export async function archiveActiveSession(): Promise<ChatSession> {
-  const active = await getActiveSession();
-  const [, fresh] = await prisma.$transaction([
-    prisma.chatSession.update({
-      where: { id: active.id },
-      data: { archivedAt: new Date() },
-    }),
-    prisma.chatSession.create({ data: {} }),
-  ]);
-  return fresh;
+export class SessionConflictError extends Error {}
+export class SessionNotFoundError extends Error {}
+
+export async function listSessions() {
+  return prisma.chatSession.findMany({
+    orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+    select: { id: true, title: true, createdAt: true, archivedAt: true,
+      _count: { select: { messages: true } } },
+  });
+}
+
+export type SessionChange =
+  | { action: "new" }
+  | { action: "open" | "delete"; sessionId: string };
+
+/** Switches are atomic: missing targets or stale tabs cannot archive another chat. */
+export async function changeSession(
+  change: SessionChange,
+  currentSessionId: string,
+  selectedDocIds: string[],
+): Promise<ActiveThread | null> {
+  return prisma.$transaction(async (tx) => {
+    const current = await tx.chatSession.findUnique({ where: { id: currentSessionId } });
+    if (!current || current.archivedAt) throw new SessionConflictError();
+    const target = change.action === "new" ? null :
+      await tx.chatSession.findUnique({ where: { id: change.sessionId } });
+    if (change.action !== "new" && !target) throw new SessionNotFoundError();
+
+    if (change.action === "delete") {
+      await tx.chatSession.delete({ where: { id: target!.id } });
+      if (target!.id !== current.id) return null;
+      return loadThread(await tx.chatSession.create({ data: {} }), tx);
+    }
+    await tx.chatSession.update({
+      where: { id: current.id },
+      data: { archivedAt: new Date(), selectedDocIds: JSON.stringify(selectedDocIds) },
+    });
+    const next = change.action === "new"
+      ? await tx.chatSession.create({ data: {} })
+      : await tx.chatSession.update({ where: { id: target!.id }, data: { archivedAt: null } });
+    return loadThread(next, tx);
+  });
+}
+
+export async function renameSession(sessionId: string, title: string) {
+  const result = await prisma.chatSession.updateMany({ where: { id: sessionId }, data: { title } });
+  if (!result.count) throw new SessionNotFoundError();
 }
