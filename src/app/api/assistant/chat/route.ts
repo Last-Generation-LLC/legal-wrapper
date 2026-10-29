@@ -136,6 +136,30 @@ export async function POST(request: Request) {
     throw err;
   }
 
+  // A second, rolling cache breakpoint on the newest message. The system
+  // breakpoint alone caches only the documents; every earlier turn of the
+  // conversation was re-sent at full price on each new turn. With this one,
+  // turn N reads turns 1..N-1 from the cache (the lookback finds turn N-1's
+  // entry) and writes only the newest exchange. Two of the four allowed
+  // breakpoints are used.
+  function withHistoryBreakpoint(msgs: ModelMessage[]): ModelMessage[] {
+    if (msgs.length === 0) return msgs;
+    const last = msgs[msgs.length - 1];
+    return [
+      ...msgs.slice(0, -1),
+      {
+        ...last,
+        providerOptions: {
+          ...last.providerOptions,
+          anthropic: {
+            ...last.providerOptions?.anthropic,
+            cacheControl: { type: "ephemeral" },
+          },
+        },
+      } as ModelMessage,
+    ];
+  }
+
   // Errors arrive mid-stream (the response is already 200 by then). Map
   // them to a legible message — the context-ceiling case especially, since
   // #15's guardrails don't exist yet. Extracted as a named const so it can
@@ -169,7 +193,7 @@ export async function POST(request: Request) {
             // cache — no error, cacheWrite stays 0.
             providerOptions: { anthropic: { cacheControl: { type: "ephemeral" } } },
           },
-          ...modelMessages,
+          ...withHistoryBreakpoint(modelMessages),
         ],
         maxOutputTokens: MAX_OUTPUT_TOKENS,
         // Single-shot by construction: no tools, no stopWhen/steps.
