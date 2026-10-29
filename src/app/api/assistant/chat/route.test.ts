@@ -302,6 +302,26 @@ describe("POST /api/assistant/chat — streaming", () => {
     expect(JSON.stringify(systemMsg?.providerOptions)).toContain("ephemeral");
   });
 
+  it("puts a rolling cache breakpoint on the newest message so earlier turns are cached", async () => {
+    vi.mocked(prisma.document.findMany).mockResolvedValue([DOC]);
+    scriptModel("ok");
+
+    const res = await POST(request(validBody()));
+    await res.text();
+
+    const mock = vi.mocked(languageModelFor).mock.results[0]
+      .value as MockLanguageModelV3;
+    const prompt = mock.doStreamCalls[0].prompt;
+    const last = prompt[prompt.length - 1];
+    expect(last.role).not.toBe("system");
+    expect(JSON.stringify(last.providerOptions)).toContain("ephemeral");
+    // System + newest message: two of the four allowed breakpoints.
+    const marked = prompt.filter((m) =>
+      JSON.stringify(m.providerOptions ?? {}).includes("ephemeral"),
+    );
+    expect(marked).toHaveLength(2);
+  });
+
   it("persists the incoming thread before the call and the finished turn after (#22)", async () => {
     vi.mocked(prisma.document.findMany).mockResolvedValue([DOC]);
     const text =
